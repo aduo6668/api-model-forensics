@@ -13,10 +13,11 @@ def score_run(
     claimed_model: str,
     provider_hint: str = "",
     source_profile: str = "api_probe",
+    external_model_hints: list[str] | None = None,
 ) -> dict[str, Any]:
     by_probe = _group_by_probe(results)
     features = _extract_features(by_probe, source_profile=source_profile)
-    observed_models = _observed_model_ids(by_probe)
+    observed_models = _merge_model_hints(_observed_model_ids(by_probe), external_model_hints or [])
     claimed_family = _infer_family(claimed_model, provider_hint, observed_models)
     candidates = _candidate_templates(
         claimed_family,
@@ -201,6 +202,39 @@ def _observed_model_ids(by_probe: dict[str, list[dict[str, Any]]]) -> list[str]:
         seen.add(value)
         normalized.append(value)
     return normalized
+
+
+def _merge_model_hints(observed_models: list[str], external_hints: list[str]) -> list[str]:
+    merged: list[str] = []
+    seen: set[str] = set()
+    for item in [*observed_models, *_normalize_external_model_hints(external_hints)]:
+        value = item.strip()
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        merged.append(value)
+    return merged
+
+
+def _normalize_external_model_hints(external_hints: list[str]) -> list[str]:
+    normalized: list[str] = []
+    for hint in external_hints:
+        if not isinstance(hint, str):
+            continue
+        value = hint.strip()
+        if not _looks_like_model_id(value):
+            continue
+        normalized.append(value)
+    return normalized
+
+
+def _looks_like_model_id(value: str) -> bool:
+    compact = value.strip().lower()
+    if not compact:
+        return False
+    if any(character.isdigit() for character in compact):
+        return True
+    return "-" in compact and len(compact) >= 6
 
 
 def _infer_family(claimed_model: str, provider_hint: str, observed_models: list[str]) -> str:

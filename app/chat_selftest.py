@@ -131,13 +131,25 @@ def score_chat_self_test_transcript(
         parser_payload = _parse_transcript_case(probe_spec, response_text)
         results.append(_result_from_case(probe_spec, case, response_text, parser_payload))
 
-    effective_claimed_model = claimed_model or transcript.get("claimed_model") or ""
-    effective_provider_hint = provider_hint or transcript.get("claimed_provider_hint") or ""
+    effective_claimed_model = (
+        claimed_model
+        or transcript.get("claimed_model")
+        or _self_report_field(self_report, "model_guess")
+        or ""
+    )
+    effective_provider_hint = (
+        provider_hint
+        or transcript.get("claimed_provider_hint")
+        or _self_report_field(self_report, "family_guess")
+        or _self_report_field(self_report, "provider_guess")
+        or ""
+    )
     summary = score_run(
         results,
         claimed_model=effective_claimed_model,
         provider_hint=effective_provider_hint,
         source_profile="conversation_host",
+        external_model_hints=self_report["hints"],
     )
     summary = _decorate_summary(summary, self_report=self_report, missing_cases=missing_cases)
 
@@ -379,6 +391,12 @@ def _empty_self_report() -> dict[str, Any]:
         "payload": {},
         "hints": [],
     }
+
+
+def _self_report_field(self_report: dict[str, Any], key: str) -> str:
+    payload = self_report.get("payload", {})
+    value = payload.get(key) if isinstance(payload, dict) else None
+    return value.strip() if isinstance(value, str) else ""
 
 
 def _expected_cases(probes: list[dict[str, Any]]) -> list[dict[str, Any]]:
