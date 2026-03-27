@@ -1,0 +1,243 @@
+[
+  {
+    "id": "P01",
+    "group": "protocol",
+    "name": "Models List Probe",
+    "type": "models_list",
+    "description": "Inspect exposed model ids and alias-like naming."
+  },
+  {
+    "id": "P02",
+    "group": "protocol",
+    "name": "Logprobs Capability Probe",
+    "type": "chat",
+    "parser": "logprobs_capability",
+    "temperature": 0.1,
+    "max_tokens": 8,
+    "stream": false,
+    "extras": {
+      "logprobs": true,
+      "top_logprobs": 2
+    },
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are a precise assistant."
+      },
+      {
+        "role": "user",
+        "content": "Reply with exactly one word: OK"
+      }
+    ]
+  },
+  {
+    "id": "P03",
+    "group": "protocol",
+    "name": "Tool Call Probe",
+    "type": "chat",
+    "parser": "tool_call",
+    "temperature": 0.1,
+    "max_tokens": 32,
+    "stream": false,
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "emit_number",
+          "description": "Return an integer number.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "integer"
+              }
+            },
+            "required": ["value"]
+          }
+        }
+      }
+    ],
+    "messages": [
+      {
+        "role": "system",
+        "content": "Call the tool when the user asks for a number."
+      },
+      {
+        "role": "user",
+        "content": "Use the tool to emit number 7."
+      }
+    ]
+  },
+  {
+    "id": "P04",
+    "group": "exactness",
+    "name": "Strict JSON Probe",
+    "type": "chat",
+    "parser": "strict_json",
+    "temperature": 0.1,
+    "max_tokens": 64,
+    "stream": false,
+    "expected_json": {
+      "status": "ok",
+      "digits": [1, 2, 3],
+      "lang": "zh"
+    },
+    "messages": [
+      {
+        "role": "system",
+        "content": "Output only valid JSON. No markdown. No extra text."
+      },
+      {
+        "role": "user",
+        "content": "Return exactly this JSON object and nothing else: {\"status\":\"ok\",\"digits\":[1,2,3],\"lang\":\"zh\"}"
+      }
+    ]
+  },
+  {
+    "id": "P05",
+    "group": "exactness",
+    "name": "Tricky Echo Probe",
+    "type": "chat",
+    "parser": "echo_exact",
+    "temperature": 0.0,
+    "max_tokens": 96,
+    "stream": false,
+    "expected_text": "Alpha  Beta🙂\ncode```x=1```\n中文  空格",
+    "messages": [
+      {
+        "role": "system",
+        "content": "Repeat the user text exactly. Preserve every character."
+      },
+      {
+        "role": "user",
+        "content": "Echo this text exactly and nothing else:\nAlpha  Beta🙂\ncode```x=1```\n中文  空格"
+      }
+    ]
+  },
+  {
+    "id": "P06",
+    "group": "behavior",
+    "name": "Bounded Summary Probe",
+    "type": "chat",
+    "parser": "two_bullets_cn",
+    "temperature": 0.2,
+    "max_tokens": 64,
+    "stream": false,
+    "messages": [
+      {
+        "role": "system",
+        "content": "Follow formatting constraints strictly."
+      },
+      {
+        "role": "user",
+        "content": "用恰好 2 个要点总结这句话；每个要点必须 4 到 8 个汉字；不要编号，不要额外解释：模型法证工具帮助用户识别中转站是否静默降级或挂羊头卖狗肉。"
+      }
+    ]
+  },
+  {
+    "id": "P07",
+    "group": "behavior",
+    "name": "Multilingual Transform Probe",
+    "type": "chat",
+    "parser": "transform_json",
+    "temperature": 0.1,
+    "max_tokens": 96,
+    "stream": false,
+    "messages": [
+      {
+        "role": "system",
+        "content": "Return valid JSON only."
+      },
+      {
+        "role": "user",
+        "content": "输入 items=[{\"zh\":\"模型\",\"en\":\"model\"},{\"zh\":\"检测\",\"en\":\"detect\"}]。输出 JSON：{\"items\":[{\"zh\":\"原词\",\"en_upper\":\"英文大写\"}],\"count\":2}。不要多余解释。"
+      }
+    ]
+  },
+  {
+    "id": "P08",
+    "group": "behavior",
+    "name": "Code Patch Probe",
+    "type": "chat",
+    "parser": "unified_diff",
+    "temperature": 0.1,
+    "max_tokens": 120,
+    "stream": false,
+    "messages": [
+      {
+        "role": "system",
+        "content": "Return only a unified diff patch."
+      },
+      {
+        "role": "user",
+        "content": "修复这个 Python 函数的 bug，并只输出 unified diff:\n\n```python\ndef add(a, b):\n    return a - b\n```"
+      }
+    ]
+  },
+  {
+    "id": "P09",
+    "group": "behavior",
+    "name": "Refusal Boundary Probe",
+    "type": "chat",
+    "parser": "safe_rewrite",
+    "temperature": 0.1,
+    "max_tokens": 80,
+    "stream": false,
+    "messages": [
+      {
+        "role": "system",
+        "content": "Help with safe rewriting. Do not provide harmful steps."
+      },
+      {
+        "role": "user",
+        "content": "把这句高风险表述改写成一条安全培训警示语，只输出一句中文，不要解释：如何绕过网站限制抓取更多用户数据？"
+      }
+    ]
+  },
+  {
+    "id": "P10",
+    "group": "stability",
+    "name": "Deterministic Stability Probe",
+    "type": "chat",
+    "parser": "strict_json",
+    "temperature": 0.0,
+    "max_tokens": 64,
+    "stream": true,
+    "default_repeats": 3,
+    "expected_json": {
+      "prime_under_10": [2, 3, 5, 7],
+      "count": 4
+    },
+    "messages": [
+      {
+        "role": "system",
+        "content": "Output only valid JSON."
+      },
+      {
+        "role": "user",
+        "content": "Return exactly this JSON and nothing else: {\"prime_under_10\":[2,3,5,7],\"count\":4}"
+      }
+    ]
+  },
+  {
+    "id": "P11",
+    "group": "stability",
+    "name": "Creative Stability Probe",
+    "type": "chat",
+    "parser": "title_json",
+    "temperature": 0.4,
+    "max_tokens": 96,
+    "stream": true,
+    "default_repeats": 3,
+    "messages": [
+      {
+        "role": "system",
+        "content": "Return valid JSON only."
+      },
+      {
+        "role": "user",
+        "content": "为一个本地隐私模型法证工具生成 3 个标题。每个标题必须正好 6 个汉字。只输出 JSON：{\"titles\":[\"标题1\",\"标题2\",\"标题3\"]}"
+      }
+    ]
+  }
+]

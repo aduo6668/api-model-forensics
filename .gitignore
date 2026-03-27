@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+outputs/runs/
+outputs/reports/
+logs/
+.env
+.venv/
+venv/
+.python-version
+.idea/
+.vscode/
+papers/
+PROJECT_PLAN.md
+MVP_PROBE_DESIGN.md
+REFERENCE_MODEL_SET_V0.md
+REPORT_SCHEMA_V0.md
+RESEARCH_IMPLEMENTATION_MEMO.md

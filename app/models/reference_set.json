@@ -1,0 +1,32 @@
+{
+  "candidate_presets": {
+    "openai": [
+      {"id": "claimed", "label_template": "{claimed_model}-like", "role": "claimed", "family": "openai"},
+      {"id": "downgrade", "label_template": "same-family-smaller-like", "role": "downgrade", "family": "openai"},
+      {"id": "alt_claude", "label_template": "claude-sonnet-like", "role": "alt", "family": "anthropic"},
+      {"id": "alt_gemini", "label_template": "gemini-flash-like", "role": "alt", "family": "gemini"},
+      {"id": "wrapped", "label_template": "wrapped-or-unknown", "role": "wrapped", "family": "unknown"}
+    ],
+    "anthropic": [
+      {"id": "claimed", "label_template": "{claimed_model}-like", "role": "claimed", "family": "anthropic"},
+      {"id": "downgrade", "label_template": "same-family-smaller-like", "role": "downgrade", "family": "anthropic"},
+      {"id": "alt_openai", "label_template": "gpt-4o-like", "role": "alt", "family": "openai"},
+      {"id": "alt_gemini", "label_template": "gemini-pro-like", "role": "alt", "family": "gemini"},
+      {"id": "wrapped", "label_template": "wrapped-or-unknown", "role": "wrapped", "family": "unknown"}
+    ],
+    "gemini": [
+      {"id": "claimed", "label_template": "{claimed_model}-like", "role": "claimed", "family": "gemini"},
+      {"id": "downgrade", "label_template": "same-family-smaller-like", "role": "downgrade", "family": "gemini"},
+      {"id": "alt_openai", "label_template": "gpt-4o-like", "role": "alt", "family": "openai"},
+      {"id": "alt_claude", "label_template": "claude-sonnet-like", "role": "alt", "family": "anthropic"},
+      {"id": "wrapped", "label_template": "wrapped-or-unknown", "role": "wrapped", "family": "unknown"}
+    ],
+    "generic": [
+      {"id": "claimed", "label_template": "{claimed_model}-like", "role": "claimed", "family": "generic"},
+      {"id": "alt_openai", "label_template": "gpt-4o-like", "role": "alt", "family": "openai"},
+      {"id": "alt_claude", "label_template": "claude-sonnet-like", "role": "alt", "family": "anthropic"},
+      {"id": "alt_gemini", "label_template": "gemini-flash-like", "role": "alt", "family": "gemini"},
+      {"id": "wrapped", "label_template": "wrapped-or-unknown", "role": "wrapped", "family": "unknown"}
+    ]
+  }
+}
