@@ -1,0 +1,85 @@
+{
+  "families": {
+    "openai": {
+      "display_name": "OpenAI",
+      "keywords": ["openai", "gpt", "chatgpt", "o1", "o3", "o4"],
+      "default_candidate": "gpt-like",
+      "fallback_same_family": "openai-same-family-like",
+      "dialects": ["openai_chat_completions"]
+    },
+    "anthropic": {
+      "display_name": "Anthropic",
+      "keywords": ["anthropic", "claude", "haiku", "sonnet", "opus"],
+      "default_candidate": "claude-like",
+      "fallback_same_family": "claude-same-family-like",
+      "dialects": ["anthropic_messages"]
+    },
+    "gemini": {
+      "display_name": "Google Gemini",
+      "keywords": ["gemini", "google"],
+      "default_candidate": "gemini-like",
+      "fallback_same_family": "gemini-same-family-like",
+      "dialects": ["gemini_generate_content"]
+    },
+    "xai": {
+      "display_name": "xAI",
+      "keywords": ["xai", "grok"],
+      "default_candidate": "grok-like",
+      "fallback_same_family": "grok-same-family-like",
+      "dialects": ["openai_chat_completions", "xai_native"]
+    },
+    "moonshot": {
+      "display_name": "Moonshot / Kimi",
+      "keywords": ["moonshot", "kimi"],
+      "default_candidate": "kimi-like",
+      "fallback_same_family": "kimi-same-family-like",
+      "dialects": ["openai_chat_completions", "moonshot_native"]
+    },
+    "deepseek": {
+      "display_name": "DeepSeek",
+      "keywords": ["deepseek"],
+      "default_candidate": "deepseek-like",
+      "fallback_same_family": "deepseek-same-family-like",
+      "dialects": ["openai_chat_completions"]
+    },
+    "minimax": {
+      "display_name": "MiniMax",
+      "keywords": ["minimax", "abab"],
+      "default_candidate": "minimax-like",
+      "fallback_same_family": "minimax-same-family-like",
+      "dialects": ["openai_chat_completions", "anthropic_messages"]
+    },
+    "glm": {
+      "display_name": "GLM / Zhipu",
+      "keywords": ["glm", "bigmodel", "zhipu"],
+      "default_candidate": "glm-like",
+      "fallback_same_family": "glm-same-family-like",
+      "dialects": ["openai_chat_completions"]
+    },
+    "stepfun": {
+      "display_name": "StepFun",
+      "keywords": ["stepfun", "step-1", "step-2", "step-3", "step-audio"],
+      "default_candidate": "step-like",
+      "fallback_same_family": "step-same-family-like",
+      "dialects": ["openai_chat_completions"]
+    },
+    "unknown": {
+      "display_name": "Unknown",
+      "keywords": [],
+      "default_candidate": "unknown-family-like",
+      "fallback_same_family": "unknown-same-family-like",
+      "dialects": []
+    }
+  },
+  "alternative_order": [
+    "openai",
+    "anthropic",
+    "gemini",
+    "xai",
+    "moonshot",
+    "deepseek",
+    "minimax",
+    "glm",
+    "stepfun"
+  ]
+}

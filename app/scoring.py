@@ -1,24 +1,21 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from statistics import mean, pstdev
 from typing import Any
 
-from .config import MODELS_DIR
+from .provider_registry import alternative_families, family_config, family_for_name
 from .probes import similarity
-
-
-REFERENCE_SET_PATH = MODELS_DIR / "reference_set.json"
 
 
 def score_run(results: list[dict[str, Any]], claimed_model: str, provider_hint: str = "") -> dict[str, Any]:
     by_probe = _group_by_probe(results)
     features = _extract_features(by_probe)
-    claimed_family = _infer_family(claimed_model, provider_hint)
-    candidates = _candidate_templates(claimed_family, claimed_model)
+    observed_models = _observed_model_ids(by_probe)
+    claimed_family = _infer_family(claimed_model, provider_hint, observed_models)
+    candidates = _candidate_templates(claimed_family, claimed_model, observed_models)
     candidate_lookup = {item["label"]: item for item in candidates}
-    probabilities = _candidate_probabilities(candidates, claimed_family, features)
+    probabilities = _candidate_probabilities(candidates, claimed_family, claimed_model, features)
     top_candidates = sorted(probabilities.items(), key=lambda item: item[1], reverse=True)
     category_probabilities = _category_probabilities(probabilities, candidate_lookup)
     label = _final_label(top_candidates, category_probabilities, features)
@@ -26,6 +23,7 @@ def score_run(results: list[dict[str, Any]], claimed_model: str, provider_hint: 
 
     return {
         "claimed_family_guess": claimed_family,
+        "observed_model_hints": observed_models[:10],
         "feature_summary": features,
         "candidate_distribution": {name: round(prob, 4) for name, prob in top_candidates},
         "candidate_probabilities": category_probabilities,
@@ -152,27 +150,149 @@ def _extract_features(by_probe: dict[str, list[dict[str, Any]]]) -> dict[str, fl
     }
 
 
-def _infer_family(claimed_model: str, provider_hint: str) -> str:
-    source = f"{claimed_model} {provider_hint}".lower()
-    if any(token in source for token in ("gpt", "openai", "4o", "o3", "o1")):
-        return "openai"
-    if any(token in source for token in ("claude", "anthropic", "sonnet", "haiku", "opus")):
-        return "anthropic"
-    if any(token in source for token in ("gemini", "google", "flash", "pro")):
-        return "gemini"
-    return "generic"
+def _observed_model_ids(by_probe: dict[str, list[dict[str, Any]]]) -> list[str]:
+    entries = by_probe.get("P01", [])
+    if not entries:
+        return []
+    details = entries[0].get("details", {})
+    models = details.get("models", [])
+    return [model for model in models if isinstance(model, str)]
 
 
-def _candidate_templates(family: str, claimed_model: str) -> list[dict[str, str]]:
-    presets = json.loads(Path(REFERENCE_SET_PATH).read_text(encoding="utf-8"))["candidate_presets"]
-    template = presets.get(family, presets["generic"])
-    return [
-        {**item, "label": item["label_template"].format(claimed_model=claimed_model or "claimed-model")}
-        for item in template
+def _infer_family(claimed_model: str, provider_hint: str, observed_models: list[str]) -> str:
+    hinted = family_for_name(provider_hint)
+    inferred = family_for_name(claimed_model)
+    observed_families = [family_for_name(model) for model in observed_models]
+    observed_families = [family for family in observed_families if family != "unknown"]
+    if observed_families:
+        counts: dict[str, int] = {}
+        for family in observed_families:
+            counts[family] = counts.get(family, 0) + 1
+        top_score = max(counts.values())
+        tied = {family for family, score in counts.items() if score == top_score}
+        if hinted in tied:
+            return hinted
+        if inferred in tied:
+            return inferred
+        return sorted(tied)[0]
+
+    if hinted != "unknown":
+        return hinted
+    if inferred != "unknown":
+        return inferred
+    return "unknown"
+
+
+def _candidate_templates(family: str, claimed_model: str, observed_models: list[str]) -> list[dict[str, Any]]:
+    claimed_label = claimed_model or "claimed-model"
+    candidates: list[dict[str, Any]] = [
+        {
+            "id": "claimed",
+            "label": claimed_label,
+            "role": "claimed",
+            "family": family,
+            "observed": claimed_label in observed_models,
+        }
     ]
 
+    same_family_observed: list[str] = []
+    alt_observed: list[tuple[str, str]] = []
+    for model in observed_models:
+        observed_family = family_for_name(model)
+        if model == claimed_label:
+            continue
+        if observed_family == family:
+            same_family_observed.append(model)
+        elif observed_family != "unknown":
+            alt_observed.append((model, observed_family))
 
-def _candidate_probabilities(candidates: list[dict[str, str]], family: str, features: dict[str, float]) -> dict[str, float]:
+    same_family_observed = sorted(
+        set(same_family_observed),
+        key=lambda model: similarity(model.lower(), claimed_label.lower()),
+        reverse=True,
+    )
+    for index, model in enumerate(same_family_observed[:2], start=1):
+        candidates.append(
+            {
+                "id": f"same_family_observed_{index}",
+                "label": model,
+                "role": "downgrade",
+                "family": family,
+                "observed": True,
+            }
+        )
+
+    if not same_family_observed:
+        candidates.append(
+            {
+                "id": "same_family_fallback",
+                "label": family_config(family).get("fallback_same_family", "same-family-other-like"),
+                "role": "downgrade",
+                "family": family,
+                "observed": False,
+            }
+        )
+
+    added_alt_families: set[str] = set()
+    for model, alt_family in alt_observed:
+        if alt_family in added_alt_families:
+            continue
+        candidates.append(
+            {
+                "id": f"alt_observed_{alt_family}",
+                "label": model,
+                "role": "alt",
+                "family": alt_family,
+                "observed": True,
+            }
+        )
+        added_alt_families.add(alt_family)
+        if len(added_alt_families) >= 3:
+            break
+
+    for alt_family in alternative_families(family):
+        if alt_family in added_alt_families:
+            continue
+        candidates.append(
+            {
+                "id": f"alt_default_{alt_family}",
+                "label": family_config(alt_family).get("default_candidate", f"{alt_family}-like"),
+                "role": "alt",
+                "family": alt_family,
+                "observed": False,
+            }
+        )
+        added_alt_families.add(alt_family)
+        if len(added_alt_families) >= 3:
+            break
+
+    candidates.append(
+        {
+            "id": "wrapped",
+            "label": "wrapped-or-unknown",
+            "role": "wrapped",
+            "family": "unknown",
+            "observed": False,
+        }
+    )
+
+    unique: list[dict[str, Any]] = []
+    seen_labels: set[str] = set()
+    for candidate in candidates:
+        label = candidate["label"]
+        if label in seen_labels:
+            continue
+        seen_labels.add(label)
+        unique.append(candidate)
+    return unique
+
+
+def _candidate_probabilities(
+    candidates: list[dict[str, Any]],
+    family: str,
+    claimed_model: str,
+    features: dict[str, float],
+) -> dict[str, float]:
     provider_alignment = {
         "openai": features["protocol_score"] * 0.45
         + features["tool_support_score"] * 0.20
@@ -197,6 +317,8 @@ def _candidate_probabilities(candidates: list[dict[str, str]], family: str, feat
         role = item["role"]
         candidate_family = item["family"]
         provider_score = provider_alignment.get(candidate_family, 0.35)
+        observed_bonus = 0.55 if item.get("observed") else 0.0
+        lexical_similarity = similarity((claimed_model or "").lower(), item["label"].lower()) if claimed_model else 0.0
         if role == "claimed":
             raw = (
                 0.25
@@ -204,6 +326,7 @@ def _candidate_probabilities(candidates: list[dict[str, str]], family: str, feat
                 + provider_score * 0.8
                 + (1 - features["wrapper_suspicion_score"]) * 0.2
                 + (1 - features["routing_shift_score"]) * 0.15
+                + observed_bonus * 0.3
             )
         elif role == "downgrade":
             raw = (
@@ -213,6 +336,8 @@ def _candidate_probabilities(candidates: list[dict[str, str]], family: str, feat
                 + max(0.0, 0.80 - features["strict_json_score"]) * 0.70
                 + max(0.0, 0.80 - features["tricky_echo_score"]) * 0.50
                 + max(0.0, 0.75 - features["stability_score"]) * 0.60
+                + observed_bonus * 0.9
+                + lexical_similarity * 0.35
             )
         elif role == "alt":
             raw = (
@@ -221,6 +346,7 @@ def _candidate_probabilities(candidates: list[dict[str, str]], family: str, feat
                 + features["protocol_mismatch_score"] * 0.35
                 + features["over_refusal_score"] * 0.15
                 + max(0.0, 0.45 - features["claimed_model_consistency_score"]) * 0.90
+                + observed_bonus * 0.85
             )
         else:
             raw = (
@@ -274,11 +400,17 @@ def _candidate_kind(candidate: dict[str, str]) -> str:
 def _candidate_rationale(candidate: dict[str, str], features: dict[str, float]) -> str:
     role = candidate.get("role")
     if role == "claimed":
+        if candidate.get("observed"):
+            return "申报模型名直接出现在接口暴露的模型列表中，且整体行为与协议信号相符。"
         return "协议、格式和稳定性信号整体更接近申报模型。"
     if role == "downgrade":
+        if candidate.get("observed"):
+            return "该模型名直接出现在接口暴露的模型列表中，且更像同家族真实后端。"
         return "同家族信号仍较强，但精确度或稳定性像更轻量版本。"
     if role == "wrapped":
         return "包装层、混模或路由漂移信号偏强。"
+    if candidate.get("observed"):
+        return "接口暴露的模型列表直接给出了另一家族候选，且部分协议/行为信号与其更接近。"
     return "部分行为层信号更接近另一模型家族。"
 
 

@@ -118,6 +118,42 @@ pip install -r requirements.txt
 python -m app.main
 ```
 
+## CLI Usage
+
+除了 GUI，这个项目现在也支持命令行检测，适合脚本、自动化流程和其他 AI 工具直接调用。
+
+查看帮助：
+
+```powershell
+python -m app.cli --help
+```
+
+返回机器可读 JSON：
+
+```powershell
+python -m app.cli `
+  --base-url http://127.0.0.1:8317 `
+  --api-key your-key `
+  --model gpt-5.4 `
+  --mode standard `
+  --format json
+```
+
+返回适合人看的文本摘要：
+
+```powershell
+python -m app.cli `
+  --base-url http://127.0.0.1:8317 `
+  --api-key your-key `
+  --model gpt-5.4 `
+  --mode standard `
+  --format text
+```
+
+如果你想从批处理入口打开 CLI 帮助，也可以用：
+
+- [launcher/start-cli.bat](launcher/start-cli.bat)
+
 ### 3. Enter Inputs
 
 在窗口里填入：
