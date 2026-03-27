@@ -62,6 +62,55 @@ def preferred_defaults_for_family(family: str) -> list[str]:
     return [value for value in defaults if isinstance(value, str) and value]
 
 
+def canonical_model_record_for_name(family: str, value: str) -> dict[str, Any] | None:
+    claimed = (value or "").strip().lower()
+    if not claimed:
+        return None
+
+    best_match: dict[str, Any] | None = None
+    best_score = 0.0
+    for model in canonical_models_for_family(family):
+        model_id = model["id"]
+        alias_candidates = [model_id, *model.get("aliases", [])]
+        score = max(_alias_similarity(claimed, alias) for alias in alias_candidates if isinstance(alias, str))
+        if score > best_score:
+            best_score = score
+            best_match = model
+    if best_score >= 0.72:
+        return best_match
+    return None
+
+
+def sibling_distance(family: str, claimed_model: str, candidate_model: str) -> float:
+    if not claimed_model or not candidate_model:
+        return 1.0
+    if claimed_model.strip().lower() == candidate_model.strip().lower():
+        return 0.0
+
+    claimed_record = canonical_model_record_for_name(family, claimed_model)
+    candidate_record = canonical_model_record_for_name(family, candidate_model)
+    if claimed_record and candidate_record:
+        generation_penalty = 0.0
+        claimed_generation = claimed_record.get("generation")
+        candidate_generation = candidate_record.get("generation")
+        if isinstance(claimed_generation, (int, float)) and isinstance(candidate_generation, (int, float)):
+            generation_penalty = min(0.45, abs(float(claimed_generation) - float(candidate_generation)) * 0.22)
+
+        series_penalty = 0.0
+        claimed_series = str(claimed_record.get("series") or "").strip().lower()
+        candidate_series = str(candidate_record.get("series") or "").strip().lower()
+        if claimed_series and candidate_series and claimed_series != candidate_series:
+            series_penalty = 0.18
+
+        tier_penalty = _tier_penalty(claimed_record.get("tier"), candidate_record.get("tier"))
+        return min(1.0, round(generation_penalty + series_penalty + tier_penalty, 4))
+
+    return min(
+        1.0,
+        round(1.0 - _alias_similarity(claimed_model.strip().lower(), candidate_model.strip().lower()), 4),
+    )
+
+
 def closest_canonical_models(family: str, claimed_model: str, limit: int = 3) -> list[str]:
     claimed = (claimed_model or "").strip().lower()
     if not claimed:
@@ -130,6 +179,27 @@ def _alias_similarity(claimed: str, alias: str) -> float:
     if compact_claimed and (compact_claimed in compact_alias or compact_alias in compact_claimed):
         return 0.90
     return SequenceMatcher(None, compact_claimed, compact_alias).ratio()
+
+
+def _tier_penalty(left: Any, right: Any) -> float:
+    left_value = str(left or "").strip().lower()
+    right_value = str(right or "").strip().lower()
+    if not left_value or not right_value:
+        return 0.16
+    if left_value == right_value:
+        return 0.0
+
+    tier_groups = [
+        {"flagship", "pro", "opus"},
+        {"sonnet", "flash", "base"},
+        {"mini", "lite", "haiku"},
+        {"nano"},
+    ]
+    left_index = next((index for index, group in enumerate(tier_groups) if left_value in group), None)
+    right_index = next((index for index, group in enumerate(tier_groups) if right_value in group), None)
+    if left_index is None or right_index is None:
+        return 0.18
+    return min(0.36, abs(left_index - right_index) * 0.12)
 
 
 def _compact_token(value: str) -> str:

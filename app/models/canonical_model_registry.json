@@ -6,11 +6,11 @@
     "openai": {
       "preferred_defaults": ["gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-4o", "gpt-4o-mini"],
       "models": [
-        {"id": "gpt-5.4", "aliases": ["gpt5.4", "gpt-5-4", "gpt5-4"], "kind": "stable"},
-        {"id": "gpt-5.4-mini", "aliases": ["gpt5.4-mini", "gpt-5-4-mini", "gpt5-4-mini"], "kind": "stable"},
-        {"id": "gpt-5.4-nano", "aliases": ["gpt5.4-nano", "gpt-5-4-nano", "gpt5-4-nano"], "kind": "stable"},
-        {"id": "gpt-4o", "aliases": ["gpt4o", "4o"], "kind": "stable"},
-        {"id": "gpt-4o-mini", "aliases": ["gpt4o-mini", "4o-mini"], "kind": "stable"}
+        {"id": "gpt-5.4", "aliases": ["gpt5.4", "gpt-5-4", "gpt5-4"], "kind": "stable", "generation": 5, "series": "gpt-5.4", "tier": "flagship"},
+        {"id": "gpt-5.4-mini", "aliases": ["gpt5.4-mini", "gpt-5-4-mini", "gpt5-4-mini"], "kind": "stable", "generation": 5, "series": "gpt-5.4", "tier": "mini"},
+        {"id": "gpt-5.4-nano", "aliases": ["gpt5.4-nano", "gpt-5-4-nano", "gpt5-4-nano"], "kind": "stable", "generation": 5, "series": "gpt-5.4", "tier": "nano"},
+        {"id": "gpt-4o", "aliases": ["gpt4o", "4o"], "kind": "stable", "generation": 4, "series": "gpt-4o", "tier": "flagship"},
+        {"id": "gpt-4o-mini", "aliases": ["gpt4o-mini", "4o-mini"], "kind": "stable", "generation": 4, "series": "gpt-4o", "tier": "mini"}
       ]
     },
     "anthropic": {
@@ -25,38 +25,53 @@
         {
           "id": "claude-opus-4-1-20250805",
           "aliases": ["claude-opus-4-1", "claude opus 4.1", "claude-opus-4.1"],
-          "kind": "stable"
+          "kind": "stable",
+          "generation": 4.1,
+          "series": "claude-opus-4",
+          "tier": "opus"
         },
         {
           "id": "claude-opus-4-20250514",
           "aliases": ["claude-opus-4", "claude opus 4", "claude-opus-4.0"],
-          "kind": "stable"
+          "kind": "stable",
+          "generation": 4.0,
+          "series": "claude-opus-4",
+          "tier": "opus"
         },
         {
           "id": "claude-sonnet-4-20250514",
           "aliases": ["claude-sonnet-4", "claude sonnet 4", "claude-sonnet-4.0"],
-          "kind": "stable"
+          "kind": "stable",
+          "generation": 4.0,
+          "series": "claude-4",
+          "tier": "sonnet"
         },
         {
           "id": "claude-3-7-sonnet-20250219",
           "aliases": ["claude-3-7-sonnet", "claude 3.7 sonnet"],
-          "kind": "stable"
+          "kind": "stable",
+          "generation": 3.7,
+          "series": "claude-3.7",
+          "tier": "sonnet"
         },
         {
           "id": "claude-3-5-haiku-20241022",
           "aliases": ["claude-3-5-haiku", "claude 3.5 haiku"],
-          "kind": "stable"
+          "kind": "stable",
+          "generation": 3.5,
+          "series": "claude-3.5",
+          "tier": "haiku"
         }
       ]
     },
     "gemini": {
       "preferred_defaults": ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"],
       "models": [
-        {"id": "gemini-2.5-pro", "aliases": ["gemini 2.5 pro", "gemini-pro-latest"], "kind": "stable"},
-        {"id": "gemini-2.5-flash", "aliases": ["gemini 2.5 flash", "gemini-flash-latest"], "kind": "stable"},
-        {"id": "gemini-2.5-flash-lite", "aliases": ["gemini 2.5 flash lite", "gemini-2.5-flash-lite-preview"], "kind": "stable"},
-        {"id": "gemini-2.0-flash", "aliases": ["gemini 2.0 flash", "gemini-2.0-flash-001"], "kind": "stable"},
-        {"id": "gemini-3.1-flash-live-preview", "aliases": ["gemini 3.1 flash live preview"], "kind": "preview"}
+        {"id": "gemini-2.5-pro", "aliases": ["gemini 2.5 pro", "gemini-pro-latest"], "kind": "stable", "generation": 2.5, "series": "gemini-2.5", "tier": "pro"},
+        {"id": "gemini-2.5-flash", "aliases": ["gemini 2.5 flash", "gemini-flash-latest"], "kind": "stable", "generation": 2.5, "series": "gemini-2.5", "tier": "flash"},
+        {"id": "gemini-2.5-flash-lite", "aliases": ["gemini 2.5 flash lite", "gemini-2.5-flash-lite-preview"], "kind": "stable", "generation": 2.5, "series": "gemini-2.5", "tier": "lite"},
+        {"id": "gemini-2.0-flash", "aliases": ["gemini 2.0 flash", "gemini-2.0-flash-001"], "kind": "stable", "generation": 2.0, "series": "gemini-2.0", "tier": "flash"},
+        {"id": "gemini-3.1-flash-live-preview", "aliases": ["gemini 3.1 flash live preview"], "kind": "preview", "generation": 3.1, "series": "gemini-3.1", "tier": "flash"}
       ]
     },
     "xai": {
