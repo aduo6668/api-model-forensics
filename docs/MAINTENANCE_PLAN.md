@@ -19,6 +19,9 @@ The project uses three layers of change:
 - `Extension layer`
   - provider adapters, family registry entries, probe specs, and baseline datasets.
   - These are the main place for growth.
+- `Protocol layer`
+  - direct-chat self-test packs, transcript schema, and skill-facing orchestration contracts.
+  - Keep this separate from API transport auditing so host-AI workflows can evolve without destabilizing the main detector.
 - `Local-only layer`
   - `.env`, run outputs, local baselines, paper corpora, and user testing notes.
   - These never need to be committed to the public repository.
@@ -60,6 +63,16 @@ Suggested onboarding checklist:
 - Add aliases only when they are supported by repeatable traces or official naming.
 - Keep any newly discovered quirks in the adapter or registry, not in ad hoc notes.
 - Ship the first pass behind a maintenance window so the regression suite can be re-run immediately.
+
+## Direct-Chat Self-Test Maintenance
+
+The direct-chat self-test layer should evolve conservatively.
+
+- Reuse parser-backed probes from `app/models/probes.json` when possible instead of inventing a second parallel prompt library.
+- Keep host-AI prompt packs and transcript scoring in a dedicated protocol module.
+- Treat self-reported model names as weak evidence.
+- Do not merge direct-chat verdicts into API verdicts unless a shared evidence model is validated with baselines.
+- When the protocol changes, version the pack id and keep old transcript scoring paths readable for at least one maintenance cycle.
 
 ## Baseline And Regression
 

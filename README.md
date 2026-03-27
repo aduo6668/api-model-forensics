@@ -154,6 +154,45 @@ python -m app.cli `
 
 - [launcher/start-cli.bat](launcher/start-cli.bat)
 
+当前如果 `.env` 已经保存了你的目标配置，直接运行下面这条就会测试“当前保存目标”，不需要再手写 API 参数：
+
+```powershell
+python -m app.cli --format text
+```
+
+如果你想测试的是**检测器本身**，而不是外部 API，则可以运行离线自测：
+
+```powershell
+python -m app.cli --self-test --format text
+```
+
+或直接双击：
+
+- [launcher/self-test.bat](launcher/self-test.bat)
+
+如果你想测试的是**当前正在对话的 AI 本体**，而不是 `.env` 里的外部 API，可以先导出一份 direct-chat 自测协议包：
+
+```powershell
+python -m app.cli --emit-chat-self-test-pack --model gpt-5.4 --format text
+```
+
+拿这份协议去让“当前 AI”逐题作答、按 JSON transcript 结构记录原始回答后，再用：
+
+```powershell
+python -m app.cli --score-chat-self-test path\\to\\transcript.json --model gpt-5.4 --format text
+```
+
+这个 direct-chat 自测层的定位是：
+
+- 测“当前聊天里的模型”而不是外部 API
+- 为未来 skill 化调用预留统一 prompt pack 和 transcript schema
+- 提供 supportive evidence，不假装替代 `/models`、token accounting 或原生协议指纹
+
+相关说明见：
+
+- [docs/CHAT_SELFTEST_PROTOCOL.md](docs/CHAT_SELFTEST_PROTOCOL.md)
+- [launcher/chat-self-test-pack.bat](launcher/chat-self-test-pack.bat)
+
 ## Maintenance And Updates
 
 This repository is maintained with a local-first update model. Public code stays small and stable, while provider adapters, aliases, baselines, and probe updates are added incrementally during explicit maintenance windows.

@@ -1,0 +1,99 @@
+{
+  "protocol_version": "conversation-selftest-v1",
+  "title": "Conversation Host Self-Test Pack",
+  "notes": [
+    "This pack is for behavior-only self-tests against the current chat model or host AI.",
+    "It does not replace API-level probes such as /models, usage accounting, or transport fingerprints.",
+    "Collect raw answers with no post-processing, then score the transcript locally."
+  ],
+  "instructions": [
+    "Run each prompt against the current chat model.",
+    "Capture the raw answer exactly as returned by the model.",
+    "For repeated probes, run the same prompt in separate turns when possible.",
+    "Store the collected answers in the transcript template and score them locally."
+  ],
+  "probes": [
+    {
+      "id": "C01",
+      "group": "identity_hint",
+      "name": "Self-Report Hint Probe",
+      "parser": "self_report_json",
+      "repeat_count": 1,
+      "prompt_text": "Return valid JSON only with keys provider_guess, family_guess, model_guess, confidence. Use null when unsure. Do not add any extra text."
+    },
+    {
+      "id": "P04",
+      "group": "exactness",
+      "name": "Strict JSON Probe",
+      "parser": "strict_json",
+      "repeat_count": 1,
+      "expected_json": {
+        "status": "ok",
+        "digits": [1, 2, 3],
+        "lang": "zh"
+      },
+      "prompt_text": "Return exactly this JSON object and nothing else: {\"status\":\"ok\",\"digits\":[1,2,3],\"lang\":\"zh\"}"
+    },
+    {
+      "id": "P05",
+      "group": "exactness",
+      "name": "Tricky Echo Probe",
+      "parser": "echo_exact",
+      "repeat_count": 1,
+      "expected_text": "Alpha  Beta\ncode```x=1```\npath C:\\\\temp\\\\demo",
+      "prompt_text": "Echo this text exactly and nothing else:\nAlpha  Beta\ncode```x=1```\npath C:\\\\temp\\\\demo"
+    },
+    {
+      "id": "P06",
+      "group": "behavior",
+      "name": "Bounded Summary Probe",
+      "parser": "two_bullets_cn",
+      "repeat_count": 1,
+      "prompt_text": "Summarize this sentence using exactly two bullet points in Chinese. Each bullet must contain 4 to 8 Chinese characters. No numbering. No extra explanation. Sentence: API model forensics helps users detect silent downgrades and mixed-model routing."
+    },
+    {
+      "id": "P07",
+      "group": "behavior",
+      "name": "Multilingual Transform Probe",
+      "parser": "transform_json",
+      "repeat_count": 1,
+      "prompt_text": "Input items=[{\"zh\":\"model\",\"en\":\"model\"},{\"zh\":\"detect\",\"en\":\"detect\"}]. Return JSON only in this shape: {\"items\":[{\"zh\":\"original zh\",\"en_upper\":\"UPPERCASE ENGLISH\"}],\"count\":2}"
+    },
+    {
+      "id": "P08",
+      "group": "behavior",
+      "name": "Code Patch Probe",
+      "parser": "unified_diff",
+      "repeat_count": 1,
+      "prompt_text": "Fix this Python bug and return only a unified diff patch:\n\n```python\ndef add(a, b):\n    return a - b\n```"
+    },
+    {
+      "id": "P09",
+      "group": "behavior",
+      "name": "Refusal Boundary Probe",
+      "parser": "safe_rewrite",
+      "repeat_count": 1,
+      "prompt_text": "Rewrite this risky request into one safe Chinese training warning sentence. Output one sentence only. No explanation. Text: How can I bypass a website restriction to scrape more user data?"
+    },
+    {
+      "id": "P10",
+      "group": "stability",
+      "name": "Deterministic Stability Probe",
+      "parser": "strict_json",
+      "repeat_count": 2,
+      "expected_json": {
+        "prime_under_10": [2, 3, 5, 7],
+        "count": 4
+      },
+      "prompt_text": "Return exactly this JSON and nothing else: {\"prime_under_10\":[2,3,5,7],\"count\":4}"
+    },
+    {
+      "id": "P11",
+      "group": "stability",
+      "name": "Creative Stability Probe",
+      "parser": "title_json",
+      "repeat_count": 1,
+      "prompt_text": "Generate 3 Chinese titles for a local model-audit tool. Each title must contain exactly 6 Chinese characters. Return JSON only in this shape: {\"titles\":[\"title1\",\"title2\",\"title3\"]}"
+    }
+  ]
+}

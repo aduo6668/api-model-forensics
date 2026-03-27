@@ -3,6 +3,7 @@ __pycache__/
 outputs/runs/
 outputs/reports/
 outputs/catalogs/
+outputs/
 logs/
 .env
 .venv/
