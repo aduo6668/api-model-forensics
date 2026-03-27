@@ -6,6 +6,7 @@ from typing import Any
 
 from .config import MODELS_DIR
 from .probes import parse_probe_result
+from .provider_registry import family_for_name
 from .scoring import score_run
 
 
@@ -132,7 +133,12 @@ def score_chat_self_test_transcript(
 
     effective_claimed_model = claimed_model or transcript.get("claimed_model") or ""
     effective_provider_hint = provider_hint or transcript.get("claimed_provider_hint") or ""
-    summary = score_run(results, claimed_model=effective_claimed_model, provider_hint=effective_provider_hint)
+    summary = score_run(
+        results,
+        claimed_model=effective_claimed_model,
+        provider_hint=effective_provider_hint,
+        source_profile="conversation_host",
+    )
     summary = _decorate_summary(summary, self_report=self_report, missing_cases=missing_cases)
 
     payload = {
@@ -303,10 +309,16 @@ def _parse_self_report_case(response_text: str) -> dict[str, Any]:
             "hints": [],
         }
     hints: list[str] = []
-    for key in ("model_guess", "family_guess", "provider_guess"):
+    model_guess = parsed.get("model_guess")
+    if isinstance(model_guess, str) and model_guess.strip():
+        hints.append(model_guess.strip())
+
+    for key in ("family_guess", "provider_guess"):
         value = parsed.get(key)
-        if isinstance(value, str) and value.strip():
-            hints.append(value.strip())
+        if not isinstance(value, str) or not value.strip():
+            continue
+        normalized = family_for_name(value.strip())
+        hints.append(normalized if normalized != "unknown" else value.strip())
     return {
         "valid": True,
         "payload": parsed,

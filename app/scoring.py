@@ -8,20 +8,42 @@ from .provider_registry import alternative_families, closest_canonical_models, f
 from .probes import similarity
 
 
-def score_run(results: list[dict[str, Any]], claimed_model: str, provider_hint: str = "") -> dict[str, Any]:
+def score_run(
+    results: list[dict[str, Any]],
+    claimed_model: str,
+    provider_hint: str = "",
+    source_profile: str = "api_probe",
+) -> dict[str, Any]:
     by_probe = _group_by_probe(results)
-    features = _extract_features(by_probe)
+    features = _extract_features(by_probe, source_profile=source_profile)
     observed_models = _observed_model_ids(by_probe)
     claimed_family = _infer_family(claimed_model, provider_hint, observed_models)
-    candidates = _candidate_templates(claimed_family, claimed_model, observed_models)
+    candidates = _candidate_templates(
+        claimed_family,
+        claimed_model,
+        observed_models,
+        source_profile=source_profile,
+    )
     candidate_lookup = {item["label"]: item for item in candidates}
-    probabilities = _candidate_probabilities(candidates, claimed_family, claimed_model, features)
+    probabilities = _candidate_probabilities(
+        candidates,
+        claimed_family,
+        claimed_model,
+        features,
+        source_profile=source_profile,
+    )
     top_candidates = sorted(probabilities.items(), key=lambda item: item[1], reverse=True)
     category_probabilities = _category_probabilities(probabilities, candidate_lookup)
-    label = _final_label(top_candidates, category_probabilities, features)
-    confidence = _confidence_level(top_candidates, category_probabilities, features)
+    label = _final_label(top_candidates, category_probabilities, features, source_profile=source_profile)
+    confidence = _confidence_level(
+        top_candidates,
+        category_probabilities,
+        features,
+        source_profile=source_profile,
+    )
 
     return {
+        "source_profile": source_profile,
         "claimed_family_guess": claimed_family,
         "observed_model_hints": observed_models[:10],
         "feature_summary": features,
@@ -52,7 +74,7 @@ def _group_by_probe(results: list[dict[str, Any]]) -> dict[str, list[dict[str, A
     return grouped
 
 
-def _extract_features(by_probe: dict[str, list[dict[str, Any]]]) -> dict[str, float]:
+def _extract_features(by_probe: dict[str, list[dict[str, Any]]], source_profile: str = "api_probe") -> dict[str, float]:
     def avg_score(probe_id: str) -> float:
         values = [item.get("score", 0.0) for item in by_probe.get(probe_id, [])]
         return round(mean(values), 4) if values else 0.0
@@ -95,7 +117,14 @@ def _extract_features(by_probe: dict[str, list[dict[str, Any]]]) -> dict[str, fl
     refusal_class = refusal_entry.get("refusal_class", "none")
     over_refusal = 1.0 if refusal_class == "over_refusal" else 0.0
 
-    protocol_mismatch = 1.0 - mean([availability("P01"), avg_score("P02"), avg_score("P03")])
+    protocol_values = [availability("P01"), avg_score("P02"), avg_score("P03")]
+    protocol_available = any(value > 0 for value in protocol_values)
+    if source_profile == "conversation_host" and not protocol_available:
+        protocol_score = 0.35
+        protocol_mismatch = 0.35
+    else:
+        protocol_score = round(mean(protocol_values), 4)
+        protocol_mismatch = 1.0 - protocol_score
     strict_json = avg_score("P04")
     tricky_echo = avg_score("P05")
     bounded_summary = avg_score("P06")
@@ -108,8 +137,11 @@ def _extract_features(by_probe: dict[str, list[dict[str, Any]]]) -> dict[str, fl
     routing_shift = min(1.0, round((1 - deterministic_stability) * 0.65 + latency_drift * 0.35, 4))
     wrapper_suspicion = min(1.0, round(over_refusal * 0.5 + protocol_mismatch * 0.3 + (1 - tricky_echo) * 0.2, 4))
 
-    protocol_score = round(mean([availability("P01"), avg_score("P02"), avg_score("P03")]), 4)
-    tokenizer_score = round(mean([tricky_echo, usage_score()]), 4)
+    usage_signal = usage_score()
+    if source_profile == "conversation_host" and usage_signal == 0.0:
+        tokenizer_score = tricky_echo
+    else:
+        tokenizer_score = round(mean([tricky_echo, usage_signal]), 4)
     behavior_score = round(mean([strict_json, bounded_summary, multilingual, diff_score, safety_boundary]), 4)
     stability_score = round(mean([deterministic_stability, creative_shape_stability]), 4)
     claimed_consistency = min(
@@ -195,7 +227,12 @@ def _infer_family(claimed_model: str, provider_hint: str, observed_models: list[
     return "unknown"
 
 
-def _candidate_templates(family: str, claimed_model: str, observed_models: list[str]) -> list[dict[str, Any]]:
+def _candidate_templates(
+    family: str,
+    claimed_model: str,
+    observed_models: list[str],
+    source_profile: str = "api_probe",
+) -> list[dict[str, Any]]:
     claimed_label = claimed_model or "claimed-model"
     candidates: list[dict[str, Any]] = [
         {
@@ -278,6 +315,7 @@ def _candidate_templates(family: str, claimed_model: str, observed_models: list[
         if len(added_alt_families) >= 3:
             break
 
+    max_seeded_alt_families = 1 if source_profile == "conversation_host" else 3
     for alt_family in alternative_families(family):
         if alt_family in added_alt_families:
             continue
@@ -292,7 +330,7 @@ def _candidate_templates(family: str, claimed_model: str, observed_models: list[
             }
         )
         added_alt_families.add(alt_family)
-        if len(added_alt_families) >= 3:
+        if len(added_alt_families) >= max_seeded_alt_families:
             break
 
     candidates.append(
@@ -321,6 +359,7 @@ def _candidate_probabilities(
     family: str,
     claimed_model: str,
     features: dict[str, float],
+    source_profile: str = "api_probe",
 ) -> dict[str, float]:
     provider_alignment = {
         "openai": features["protocol_score"] * 0.45
@@ -342,6 +381,7 @@ def _candidate_probabilities(
     }
 
     raw_scores: dict[str, float] = {}
+    conversation_mode = source_profile == "conversation_host"
     for item in candidates:
         role = item["role"]
         candidate_family = item["family"]
@@ -357,6 +397,8 @@ def _candidate_probabilities(
                 + (1 - features["routing_shift_score"]) * 0.15
                 + observed_bonus * 0.3
             )
+            if conversation_mode:
+                raw += 0.55
         elif role == "downgrade":
             raw = (
                 0.12
@@ -368,6 +410,8 @@ def _candidate_probabilities(
                 + observed_bonus * 0.9
                 + lexical_similarity * 0.35
             )
+            if conversation_mode:
+                raw += lexical_similarity * 0.25 + max(0.0, 0.75 - features["claimed_model_consistency_score"]) * 0.20
         elif role == "alt":
             raw = (
                 0.08
@@ -377,6 +421,8 @@ def _candidate_probabilities(
                 + max(0.0, 0.45 - features["claimed_model_consistency_score"]) * 0.90
                 + observed_bonus * 0.85
             )
+            if conversation_mode:
+                raw *= 0.55
         else:
             raw = (
                 0.05
@@ -384,6 +430,8 @@ def _candidate_probabilities(
                 + features["routing_shift_score"] * 1.6
                 + features["protocol_mismatch_score"] * 0.8
             )
+            if conversation_mode:
+                raw *= 0.6
         raw_scores[item["label"]] = max(0.03, raw)
 
     total = sum(raw_scores.values())
@@ -447,9 +495,29 @@ def _final_label(
     top_candidates: list[tuple[str, float]],
     category_probabilities: dict[str, float],
     features: dict[str, float],
+    source_profile: str = "api_probe",
 ) -> str:
     if features["protocol_score"] < 0.2 and features["behavior_score"] < 0.25:
         return "insufficient evidence"
+    if source_profile == "conversation_host":
+        if (
+            category_probabilities["claimed_model_probability"] >= 0.42
+            and features["claimed_model_consistency_score"] >= 0.50
+        ):
+            return "likely consistent with claimed model"
+        if category_probabilities["same_family_downgrade_probability"] >= 0.25:
+            return "likely same-family downgrade"
+        if (
+            category_probabilities["wrapped_or_unknown_probability"] >= 0.34
+            or features["routing_shift_score"] >= 0.42
+        ):
+            return "suspected routing shift or mixed backend"
+        if (
+            category_probabilities["alternative_family_probability"] >= 0.46
+            and category_probabilities["claimed_model_probability"] < 0.32
+        ):
+            return "likely alternative family"
+        return "ambiguous"
     if (
         category_probabilities["wrapped_or_unknown_probability"] >= 0.34
         or features["routing_shift_score"] >= 0.42
@@ -481,10 +549,19 @@ def _confidence_level(
     top_candidates: list[tuple[str, float]],
     category_probabilities: dict[str, float],
     features: dict[str, float],
+    source_profile: str = "api_probe",
 ) -> str:
     if len(top_candidates) < 2:
         return "low"
     margin = top_candidates[0][1] - top_candidates[1][1]
+    if source_profile == "conversation_host":
+        if (
+            top_candidates[0][1] >= 0.52
+            and margin >= 0.10
+            and features["claimed_model_consistency_score"] >= 0.55
+        ):
+            return "medium"
+        return "low"
     if (
         top_candidates[0][1] >= 0.60
         and margin >= 0.18
