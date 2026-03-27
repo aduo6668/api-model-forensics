@@ -9,6 +9,7 @@ MODELS_DIR = APP_DIR / "models"
 OUTPUTS_DIR = ROOT_DIR / "outputs"
 REPORTS_DIR = OUTPUTS_DIR / "reports"
 RUNS_DIR = OUTPUTS_DIR / "runs"
+CATALOGS_DIR = OUTPUTS_DIR / "catalogs"
 LOGS_DIR = ROOT_DIR / "logs"
 ENV_FILE = ROOT_DIR / ".env"
 SCHEMA_VERSION = "0.1"
@@ -59,7 +60,7 @@ FONT_CANDIDATES = [
 
 
 def ensure_runtime_dirs() -> None:
-    for path in (OUTPUTS_DIR, REPORTS_DIR, RUNS_DIR, LOGS_DIR):
+    for path in (OUTPUTS_DIR, REPORTS_DIR, RUNS_DIR, CATALOGS_DIR, LOGS_DIR):
         path.mkdir(parents=True, exist_ok=True)
 
 

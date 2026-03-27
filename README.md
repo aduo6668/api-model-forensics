@@ -163,6 +163,15 @@ This repository is maintained with a local-first update model. Public code stays
 - `Token discipline`: new probes should stay cheap unless a deeper pass is justified by evidence
 - `Onboarding rule`: add new vendors or model families with additive registry changes and regression checks, not broad rewrites
 
+## External Catalog Refresh
+
+The project can also pull a frontier catalog snapshot from OpenRouter for local research and candidate expansion. This is a supplemental source for fast-moving model names and descriptions, not a replacement for first-party provider docs.
+
+- CLI: `python -m app.catalog_cli --source openrouter --limit 30`
+- Batch launcher: [launcher/refresh-openrouter-catalog.bat](launcher/refresh-openrouter-catalog.bat)
+- Local outputs: `outputs/catalogs/openrouter-catalog-latest.json`, `outputs/catalogs/openrouter-catalog-latest-summary.json`, `outputs/catalogs/openrouter-catalog-latest-summary.md`
+- Expected use: use OpenRouter snapshots to discover new frontier aliases and descriptions, then decide what should graduate into the source-backed seed registry
+
 ### 3. Enter Inputs
 
 在窗口里填入：

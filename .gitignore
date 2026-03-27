@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 outputs/runs/
 outputs/reports/
+outputs/catalogs/
 logs/
 .env
 .venv/
