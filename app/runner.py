@@ -23,7 +23,8 @@ def run_analysis(
     progress_cb: ProgressCallback | None = None,
 ) -> dict[str, Any]:
     started_at = datetime.now()
-    normalized_base_url = api_client.normalize_base_url(base_url)
+    target_info = api_client.describe_target(base_url, provider_hint=provider_hint, claimed_model=claimed_model)
+    normalized_base_url = target_info["normalized_base_url"]
     ctx = ProbeExecutionContext(
         base_url=normalized_base_url,
         api_key=api_key,
@@ -52,9 +53,12 @@ def run_analysis(
         "started_at": started_at.strftime("%Y-%m-%d %H:%M:%S"),
         "finished_at": finished_at.strftime("%Y-%m-%d %H:%M:%S"),
         "target_base_url": normalized_base_url,
-        "resolved_chat_endpoint": api_client.chat_endpoint(normalized_base_url),
+        "resolved_chat_endpoint": target_info["resolved_chat_endpoint"],
+        "resolved_models_endpoint": target_info["resolved_models_endpoint"],
         "claimed_model": claimed_model,
         "provider_hint": provider_hint,
+        "adapter_name": target_info["adapter_name"],
+        "dialect": target_info["dialect"],
         "mode": mode,
         "budget_profile": BUDGET_PROFILES[mode],
         "privacy_note": PRIVACY_UI_TEXT,
@@ -164,6 +168,9 @@ def _build_report_payload(
             "privacy_mode": PRIVACY_MODE,
             "target_base_url": run_meta["target_base_url"],
             "resolved_chat_endpoint": run_meta["resolved_chat_endpoint"],
+            "resolved_models_endpoint": run_meta.get("resolved_models_endpoint"),
+            "adapter_name": run_meta.get("adapter_name"),
+            "dialect": run_meta.get("dialect"),
             "claimed_model": claimed_model,
             "claimed_provider_guess": summary["claimed_family_guess"],
             "claimed_snapshot_guess": None,

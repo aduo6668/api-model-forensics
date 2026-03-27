@@ -154,6 +154,15 @@ python -m app.cli `
 
 - [launcher/start-cli.bat](launcher/start-cli.bat)
 
+## Maintenance And Updates
+
+This repository is maintained with a local-first update model. Public code stays small and stable, while provider adapters, aliases, baselines, and probe updates are added incrementally during explicit maintenance windows.
+
+- `Maintenance policy`: [docs/MAINTENANCE_PLAN.md](docs/MAINTENANCE_PLAN.md)
+- `Local-first`: raw requests, outputs, baselines, and internal notes stay on the user's machine by default
+- `Token discipline`: new probes should stay cheap unless a deeper pass is justified by evidence
+- `Onboarding rule`: add new vendors or model families with additive registry changes and regression checks, not broad rewrites
+
 ### 3. Enter Inputs
 
 在窗口里填入：

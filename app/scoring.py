@@ -4,7 +4,7 @@ import json
 from statistics import mean, pstdev
 from typing import Any
 
-from .provider_registry import alternative_families, family_config, family_for_name
+from .provider_registry import alternative_families, closest_canonical_models, family_config, family_for_name
 from .probes import similarity
 
 
@@ -156,7 +156,19 @@ def _observed_model_ids(by_probe: dict[str, list[dict[str, Any]]]) -> list[str]:
         return []
     details = entries[0].get("details", {})
     models = details.get("models", [])
-    return [model for model in models if isinstance(model, str)]
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for model in models:
+        if not isinstance(model, str):
+            continue
+        value = model.strip()
+        if value.startswith("models/"):
+            value = value.split("/", 1)[1]
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        normalized.append(value)
+    return normalized
 
 
 def _infer_family(claimed_model: str, provider_hint: str, observed_models: list[str]) -> str:
@@ -223,15 +235,31 @@ def _candidate_templates(family: str, claimed_model: str, observed_models: list[
         )
 
     if not same_family_observed:
-        candidates.append(
-            {
-                "id": "same_family_fallback",
-                "label": family_config(family).get("fallback_same_family", "same-family-other-like"),
-                "role": "downgrade",
-                "family": family,
-                "observed": False,
-            }
-        )
+        seeded_same_family = [
+            model
+            for model in closest_canonical_models(family, claimed_label, limit=3)
+            if model != claimed_label
+        ]
+        for index, model in enumerate(seeded_same_family[:2], start=1):
+            candidates.append(
+                {
+                    "id": f"same_family_seed_{index}",
+                    "label": model,
+                    "role": "downgrade",
+                    "family": family,
+                    "observed": False,
+                }
+            )
+        if not seeded_same_family:
+            candidates.append(
+                {
+                    "id": "same_family_fallback",
+                    "label": family_config(family).get("fallback_same_family", "same-family-other-like"),
+                    "role": "downgrade",
+                    "family": family,
+                    "observed": False,
+                }
+            )
 
     added_alt_families: set[str] = set()
     for model, alt_family in alt_observed:
@@ -253,10 +281,11 @@ def _candidate_templates(family: str, claimed_model: str, observed_models: list[
     for alt_family in alternative_families(family):
         if alt_family in added_alt_families:
             continue
+        seeded_alt = closest_canonical_models(alt_family, "", limit=1)
         candidates.append(
             {
                 "id": f"alt_default_{alt_family}",
-                "label": family_config(alt_family).get("default_candidate", f"{alt_family}-like"),
+                "label": seeded_alt[0] if seeded_alt else family_config(alt_family).get("default_candidate", f"{alt_family}-like"),
                 "role": "alt",
                 "family": alt_family,
                 "observed": False,

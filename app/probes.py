@@ -27,7 +27,12 @@ def load_probes() -> list[dict[str, Any]]:
 def execute_probe(probe: dict[str, Any], ctx: ProbeExecutionContext, repeat_index: int = 1) -> dict[str, Any]:
     probe_type = probe["type"]
     if probe_type == "models_list":
-        result = api_client.list_models(ctx.base_url, ctx.api_key)
+        result = api_client.list_models(
+            ctx.base_url,
+            ctx.api_key,
+            provider_hint=ctx.provider_hint,
+            claimed_model=ctx.claimed_model,
+        )
         models = result.get("models", [])
         parser = {
             "score": 1.0 if models else 0.0,
@@ -52,7 +57,15 @@ def execute_probe(probe: dict[str, Any], ctx: ProbeExecutionContext, repeat_inde
         payload[key] = value
 
     stream = bool(probe.get("stream", False))
-    result = api_client.post_chat(ctx.base_url, ctx.api_key, payload, probe["id"], stream=stream)
+    result = api_client.post_chat(
+        ctx.base_url,
+        ctx.api_key,
+        payload,
+        probe["id"],
+        stream=stream,
+        provider_hint=ctx.provider_hint,
+        claimed_model=ctx.claimed_model,
+    )
     parser = parse_probe_result(probe, result)
     return _base_result(probe, repeat_index, parser, result, payload)
 
@@ -96,6 +109,9 @@ def _base_result(
         "tool_calls": result.get("tool_calls", []),
         "logprobs": result.get("logprobs"),
         "raw_response_text": result.get("raw_text", ""),
+        "adapter_name": result.get("adapter_name"),
+        "dialect": result.get("dialect"),
+        "resolved_endpoint": result.get("resolved_endpoint"),
     }
 
 

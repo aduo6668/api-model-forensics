@@ -96,12 +96,19 @@ def _stderr_progress(message: str) -> None:
 
 def _build_cli_payload(args: argparse.Namespace, result: dict[str, Any]) -> dict[str, Any]:
     summary = result["summary"]
+    run_meta = result["run_meta"]
     return {
         "input": {
             "base_url": args.base_url,
             "claimed_model": args.model,
             "provider_hint": args.provider_hint,
             "mode": args.mode,
+        },
+        "runtime": {
+            "adapter_name": run_meta.get("adapter_name"),
+            "dialect": run_meta.get("dialect"),
+            "resolved_chat_endpoint": run_meta.get("resolved_chat_endpoint"),
+            "resolved_models_endpoint": run_meta.get("resolved_models_endpoint"),
         },
         "decision": {
             "verdict_label": summary["verdict_label"],
@@ -125,14 +132,20 @@ def _build_cli_payload(args: argparse.Namespace, result: dict[str, Any]) -> dict
             {
                 "input": {
                     "base_url": args.base_url,
-                    "claimed_model": args.model,
-                    "provider_hint": args.provider_hint,
-                    "mode": args.mode,
-                },
-                "decision": {
-                    "verdict_label": summary["verdict_label"],
-                    "confidence_level": summary["confidence_level"],
-                    "candidate_probabilities": summary["candidate_probabilities"],
+                "claimed_model": args.model,
+                "provider_hint": args.provider_hint,
+                "mode": args.mode,
+            },
+            "runtime": {
+                "adapter_name": run_meta.get("adapter_name"),
+                "dialect": run_meta.get("dialect"),
+                "resolved_chat_endpoint": run_meta.get("resolved_chat_endpoint"),
+                "resolved_models_endpoint": run_meta.get("resolved_models_endpoint"),
+            },
+            "decision": {
+                "verdict_label": summary["verdict_label"],
+                "confidence_level": summary["confidence_level"],
+                "candidate_probabilities": summary["candidate_probabilities"],
                     "top_candidates": summary["top_candidates"],
                     "primary_reason": summary["primary_reason"],
                     "secondary_reason": summary["secondary_reason"],
@@ -154,10 +167,13 @@ def _build_cli_payload(args: argparse.Namespace, result: dict[str, Any]) -> dict
 def _render_text(payload: dict[str, Any]) -> str:
     decision = payload["decision"]
     probs = decision["candidate_probabilities"]
+    runtime = payload.get("runtime", {})
     lines = [
         "API Model Forensics CLI",
         f"Model: {payload['input']['claimed_model']}",
         f"Mode: {payload['input']['mode']}",
+        f"Adapter: {runtime.get('adapter_name', 'unknown')}",
+        f"Dialect: {runtime.get('dialect', 'unknown')}",
         f"Verdict: {decision['verdict_label']}",
         f"Confidence: {decision['confidence_level']}",
         "",
