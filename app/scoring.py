@@ -4,7 +4,13 @@ import json
 from statistics import mean, pstdev
 from typing import Any
 
-from .provider_registry import alternative_families, closest_canonical_models, family_config, family_for_name
+from .provider_registry import (
+    alternative_families,
+    closest_canonical_models,
+    family_config,
+    family_for_name,
+    sibling_distance,
+)
 from .probes import similarity
 
 
@@ -80,6 +86,14 @@ def _extract_features(by_probe: dict[str, list[dict[str, Any]]], source_profile:
         values = [item.get("score", 0.0) for item in by_probe.get(probe_id, [])]
         return round(mean(values), 4) if values else 0.0
 
+    def avg_score_any(probe_ids: tuple[str, ...]) -> tuple[float, int]:
+        values = [
+            item.get("score", 0.0)
+            for probe_id in probe_ids
+            for item in by_probe.get(probe_id, [])
+        ]
+        return (round(mean(values), 4), len(values)) if values else (0.0, 0)
+
     def availability(probe_id: str) -> float:
         entries = by_probe.get(probe_id, [])
         if not entries:
@@ -134,6 +148,35 @@ def _extract_features(by_probe: dict[str, list[dict[str, Any]]], source_profile:
     safety_boundary = avg_score("P09")
     deterministic_stability = stability_for("P10")
     creative_shape_stability = avg_score("P11")
+    advanced_probe_ids = ("P12", "P13", "P14", "P15", "P16")
+    advanced_reasoning_score, advanced_probe_count = avg_score_any(advanced_probe_ids)
+    advanced_stability = stability_for("P16")
+    advanced_probes_present = sum(1 for probe_id in advanced_probe_ids if by_probe.get(probe_id))
+    advanced_probe_coverage = round(advanced_probes_present / len(advanced_probe_ids), 4)
+    if advanced_probe_count:
+        capability_tier_score = (
+            round(mean([advanced_reasoning_score, advanced_stability]), 4)
+            if by_probe.get("P16")
+            else advanced_reasoning_score
+        )
+    elif source_profile == "conversation_host":
+        capability_tier_score = round(mean([strict_json, multilingual, diff_score]), 4)
+    else:
+        capability_tier_score = round(mean([strict_json, multilingual, diff_score]), 4)
+    basic_compliance_score = round(
+        mean([strict_json, tricky_echo, bounded_summary, multilingual, diff_score, safety_boundary]),
+        4,
+    )
+    if advanced_probe_count:
+        probe_disagreement_score = max(0.0, round(basic_compliance_score - capability_tier_score, 4))
+    else:
+        probe_disagreement_score = max(
+            0.0,
+            round(
+                basic_compliance_score - round(mean([diff_score, deterministic_stability, creative_shape_stability]), 4),
+                4,
+            ),
+        )
     latency_drift = max(latency_variability("P10"), latency_variability("P11"))
     routing_shift = min(1.0, round((1 - deterministic_stability) * 0.65 + latency_drift * 0.35, 4))
     wrapper_suspicion = min(1.0, round(over_refusal * 0.5 + protocol_mismatch * 0.3 + (1 - tricky_echo) * 0.2, 4))
@@ -145,24 +188,47 @@ def _extract_features(by_probe: dict[str, list[dict[str, Any]]], source_profile:
         tokenizer_score = round(mean([tricky_echo, usage_signal]), 4)
     behavior_score = round(mean([strict_json, bounded_summary, multilingual, diff_score, safety_boundary]), 4)
     stability_score = round(mean([deterministic_stability, creative_shape_stability]), 4)
-    claimed_consistency = min(
-        1.0,
-        round(
-            protocol_score * 0.23
-            + tokenizer_score * 0.20
-            + behavior_score * 0.32
-            + stability_score * 0.17
-            - wrapper_suspicion * 0.10
-            - routing_shift * 0.08,
-            4,
-        ),
-    )
+    if source_profile == "conversation_host":
+        claimed_consistency = min(
+            1.0,
+            round(
+                protocol_score * 0.17
+                + tokenizer_score * 0.16
+                + behavior_score * 0.20
+                + stability_score * 0.12
+                + capability_tier_score * 0.24
+                + advanced_probe_coverage * 0.04
+                + (1 - probe_disagreement_score) * 0.05
+                - wrapper_suspicion * 0.10
+                - routing_shift * 0.06,
+                4,
+            ),
+        )
+    else:
+        claimed_consistency = min(
+            1.0,
+            round(
+                protocol_score * 0.21
+                + tokenizer_score * 0.18
+                + behavior_score * 0.27
+                + stability_score * 0.14
+                + capability_tier_score * 0.18
+                - wrapper_suspicion * 0.10
+                - routing_shift * 0.06,
+                4,
+            ),
+        )
 
     return {
         "protocol_score": protocol_score,
         "tokenizer_score": tokenizer_score,
         "behavior_score": behavior_score,
         "stability_score": stability_score,
+        "capability_tier_score": capability_tier_score,
+        "advanced_reasoning_score": advanced_reasoning_score,
+        "advanced_stability_score": advanced_stability,
+        "advanced_probe_coverage": advanced_probe_coverage,
+        "probe_disagreement_score": probe_disagreement_score,
         "routing_shift_score": routing_shift,
         "wrapper_suspicion_score": wrapper_suspicion,
         "claimed_model_consistency_score": max(0.0, claimed_consistency),
@@ -302,6 +368,7 @@ def _candidate_templates(
                 "role": "downgrade",
                 "family": family,
                 "observed": True,
+                "sibling_distance": sibling_distance(family, claimed_label, model),
             }
         )
 
@@ -319,6 +386,7 @@ def _candidate_templates(
                     "role": "downgrade",
                     "family": family,
                     "observed": False,
+                    "sibling_distance": sibling_distance(family, claimed_label, model),
                 }
             )
         if not seeded_same_family:
@@ -329,6 +397,7 @@ def _candidate_templates(
                     "role": "downgrade",
                     "family": family,
                     "observed": False,
+                    "sibling_distance": 0.9,
                 }
             )
 
@@ -416,23 +485,35 @@ def _candidate_probabilities(
 
     raw_scores: dict[str, float] = {}
     conversation_mode = source_profile == "conversation_host"
+    capability_tier = features.get("capability_tier_score", features["behavior_score"])
+    probe_gap = features.get("probe_disagreement_score", 0.0)
+    advanced_coverage = features.get("advanced_probe_coverage", 0.0)
+    same_family_observed_present = any(
+        candidate.get("role") == "downgrade" and candidate.get("observed")
+        for candidate in candidates
+    )
     for item in candidates:
         role = item["role"]
         candidate_family = item["family"]
         provider_score = provider_alignment.get(candidate_family, 0.35)
         observed_bonus = 0.55 if item.get("observed") else 0.0
         lexical_similarity = similarity((claimed_model or "").lower(), item["label"].lower()) if claimed_model else 0.0
+        sibling_gap = float(item.get("sibling_distance", 0.85))
         if role == "claimed":
             raw = (
                 0.25
                 + features["claimed_model_consistency_score"] * 3.2
                 + provider_score * 0.8
+                + capability_tier * 0.55
                 + (1 - features["wrapper_suspicion_score"]) * 0.2
                 + (1 - features["routing_shift_score"]) * 0.15
                 + observed_bonus * 0.3
             )
             if conversation_mode:
-                raw += 0.55
+                raw += 0.55 + capability_tier * 0.20 + (1 - probe_gap) * 0.16 + advanced_coverage * 0.10
+                raw -= max(0.0, 0.80 - capability_tier) * 0.90 + probe_gap * 0.70
+                if not item.get("observed") and same_family_observed_present:
+                    raw -= 0.75
         elif role == "downgrade":
             raw = (
                 0.12
@@ -443,9 +524,17 @@ def _candidate_probabilities(
                 + max(0.0, 0.75 - features["stability_score"]) * 0.60
                 + observed_bonus * 0.9
                 + lexical_similarity * 0.35
+                + (1 - sibling_gap) * 0.45
             )
             if conversation_mode:
-                raw += lexical_similarity * 0.25 + max(0.0, 0.75 - features["claimed_model_consistency_score"]) * 0.20
+                raw += (
+                    lexical_similarity * 0.20
+                    + max(0.0, 0.86 - capability_tier) * 1.65
+                    + probe_gap * 1.30
+                    + (1 - sibling_gap) * 0.40
+                )
+                if item.get("observed"):
+                    raw += 0.40
         elif role == "alt":
             raw = (
                 0.08
@@ -456,7 +545,7 @@ def _candidate_probabilities(
                 + observed_bonus * 0.85
             )
             if conversation_mode:
-                raw *= 0.55
+                raw *= 0.42
         else:
             raw = (
                 0.05
@@ -465,7 +554,7 @@ def _candidate_probabilities(
                 + features["protocol_mismatch_score"] * 0.8
             )
             if conversation_mode:
-                raw *= 0.6
+                raw *= 0.5
         raw_scores[item["label"]] = max(0.03, raw)
 
     total = sum(raw_scores.values())
@@ -535,11 +624,23 @@ def _final_label(
         return "insufficient evidence"
     if source_profile == "conversation_host":
         if (
+            category_probabilities["same_family_downgrade_probability"] >= 0.30
+            and category_probabilities["claimed_model_probability"]
+            <= category_probabilities["same_family_downgrade_probability"] + 0.12
+        ):
+            return "likely same-family downgrade"
+        if (
             category_probabilities["claimed_model_probability"] >= 0.42
             and features["claimed_model_consistency_score"] >= 0.50
         ):
             return "likely consistent with claimed model"
-        if category_probabilities["same_family_downgrade_probability"] >= 0.25:
+        if (
+            category_probabilities["same_family_downgrade_probability"] >= 0.27
+            and (
+                features.get("probe_disagreement_score", 0.0) >= 0.10
+                or features.get("capability_tier_score", features["behavior_score"]) < 0.60
+            )
+        ):
             return "likely same-family downgrade"
         if (
             category_probabilities["wrapped_or_unknown_probability"] >= 0.34
@@ -593,6 +694,10 @@ def _confidence_level(
             top_candidates[0][1] >= 0.52
             and margin >= 0.10
             and features["claimed_model_consistency_score"] >= 0.55
+            and (
+                features.get("advanced_probe_coverage", 0.0) >= 0.6
+                or features.get("capability_tier_score", features["behavior_score"]) >= 0.72
+            )
         ):
             return "medium"
         return "low"
@@ -619,6 +724,7 @@ def _evidence_breakdown(features: dict[str, float]) -> list[dict[str, Any]]:
         ("protocol_score", "协议表面一致性"),
         ("tokenizer_score", "分词与计量侧信号"),
         ("behavior_score", "格式与行为一致性"),
+        ("capability_tier_score", "档位能力匹配度"),
         ("stability_score", "重复采样稳定性"),
         ("routing_shift_score", "路由或漂移风险"),
         ("wrapper_suspicion_score", "包装层可疑度"),
@@ -669,3 +775,22 @@ def _primary_caveats(features: dict[str, float]) -> list[str]:
     if not caveats:
         caveats.append("当前结论基于低成本本地 probe，属于概率性取证结果。")
     return caveats
+
+
+def _tier_fit_score(candidate_label: str, capability_score: float) -> float:
+    center = _model_capability_center(candidate_label)
+    distance = abs(capability_score - center)
+    return round(max(0.0, 1.0 - distance / 0.55), 4)
+
+
+def _model_capability_center(candidate_label: str) -> float:
+    label = (candidate_label or "").lower()
+    if any(token in label for token in ("nano", "haiku", "flash-lite", "flashlite", "small", "lite")):
+        return 0.34
+    if any(token in label for token in ("mini", "flash", "air", "instant")):
+        return 0.52
+    if any(token in label for token in ("sonnet", "pro", "turbo", "medium")):
+        return 0.70
+    if any(token in label for token in ("max", "opus", "ultra", "large")):
+        return 0.90
+    return 0.82

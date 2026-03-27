@@ -16,7 +16,7 @@ This protocol exists for that second layer.
 
 ## What It Does
 
-The protocol exports a fixed prompt pack and a transcript schema.
+The protocol exports a versioned prompt pack and a transcript schema.
 
 A caller, script, or future skill can:
 
@@ -28,6 +28,7 @@ The scorer then reports:
 
 - candidate probabilities and top candidates
 - exactness / behavior / stability-derived evidence
+- capability-tier evidence from higher-constraint probes
 - self-reported provider/model hints
 - a limited verdict based on direct-chat evidence only
 
@@ -62,8 +63,8 @@ Minimal shape:
 
 ```json
 {
-  "protocol_version": "conversation-selftest-v1",
-  "pack_id": "conversation-selftest-v1",
+  "protocol_version": "conversation-selftest-v2",
+  "pack_id": "conversation-selftest-v2",
   "claimed_model": "gpt-5.4",
   "claimed_provider_hint": "openai",
   "source_kind": "conversation_host",
@@ -98,6 +99,8 @@ Minimal shape:
 
 Compatibility note:
 
+- `conversation-selftest-v2` is the current default pack emitted by the CLI.
+- The scorer still accepts legacy `conversation-selftest-v1` transcripts.
 - The scorer treats `cases` as the canonical transcript field.
 - For easier skill integration, it also accepts a flat `responses` array when each item includes `probe_id`, `repeat_index`, and `response` or `response_text`.
 
@@ -106,7 +109,9 @@ Compatibility note:
 These are the intended long-term boundaries:
 
 - `app/models/conversation_selftest_pack_v1.json`
-  - versioned source of truth for current-chat prompt packs
+  - legacy direct-chat pack kept for backward compatibility
+- `app/models/conversation_selftest_pack_v2.json`
+  - current direct-chat pack with stronger same-family tier probes
 - `app/models/probes.json`
   - reusable parser-backed probe specs used by both API probing and direct-chat scoring
 - `app/chat_selftest.py`

@@ -10,11 +10,17 @@ from .provider_registry import family_for_name
 from .scoring import score_run
 
 
-CHAT_SELF_TEST_PACK_PATH = MODELS_DIR / "conversation_selftest_pack_v1.json"
+CHAT_SELF_TEST_PACK_PATHS = {
+    "conversation-selftest-v1": MODELS_DIR / "conversation_selftest_pack_v1.json",
+    "conversation-selftest-v2": MODELS_DIR / "conversation_selftest_pack_v2.json",
+}
+LATEST_CHAT_SELF_TEST_PACK_ID = "conversation-selftest-v2"
 
 
-def load_chat_self_test_pack() -> dict[str, Any]:
-    return json.loads(CHAT_SELF_TEST_PACK_PATH.read_text(encoding="utf-8"))
+def load_chat_self_test_pack(pack_id: str = "") -> dict[str, Any]:
+    resolved_pack_id = pack_id.strip() or LATEST_CHAT_SELF_TEST_PACK_ID
+    pack_path = CHAT_SELF_TEST_PACK_PATHS.get(resolved_pack_id, CHAT_SELF_TEST_PACK_PATHS[LATEST_CHAT_SELF_TEST_PACK_ID])
+    return json.loads(pack_path.read_text(encoding="utf-8"))
 
 
 def build_chat_self_test_pack(claimed_model: str, provider_hint: str = "") -> dict[str, Any]:
@@ -105,7 +111,8 @@ def score_chat_self_test_transcript(
     claimed_model: str = "",
     provider_hint: str = "",
 ) -> dict[str, Any]:
-    pack = load_chat_self_test_pack()
+    transcript_pack_id = str(transcript.get("pack_id") or transcript.get("protocol_version") or "").strip()
+    pack = load_chat_self_test_pack(transcript_pack_id)
     probe_specs = {probe["id"]: probe for probe in pack["probes"]}
     transcript_case_lookup = _transcript_case_lookup(
         transcript.get("cases") or _cases_from_responses(transcript.get("responses", []))
@@ -370,6 +377,11 @@ def _conversation_verdict(summary: dict[str, Any]) -> str:
     features = summary["feature_summary"]
     if probs["wrapped_or_unknown_probability"] >= 0.38 or features["routing_shift_score"] >= 0.42:
         return "direct-chat self-test suggests possible routing overlay or mismatch"
+    if (
+        probs["same_family_downgrade_probability"] >= 0.30
+        and probs["claimed_model_probability"] <= probs["same_family_downgrade_probability"] + 0.12
+    ):
+        return "direct-chat self-test suggests same-family variant or downgrade"
     if probs["claimed_model_probability"] >= 0.45 and features["claimed_model_consistency_score"] >= 0.52:
         return "direct-chat self-test leans consistent with claimed model"
     if probs["same_family_downgrade_probability"] >= 0.28:

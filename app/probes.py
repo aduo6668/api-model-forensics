@@ -127,6 +127,7 @@ def parse_probe_result(probe: dict[str, Any], result: dict[str, Any]) -> dict[st
     parser_name = probe.get("parser", "plain_text")
     return {
         "strict_json": _parse_strict_json,
+        "json_assertions": _parse_json_assertions,
         "echo_exact": _parse_echo_exact,
         "two_bullets_cn": _parse_two_bullets_cn,
         "transform_json": _parse_transform_json,
@@ -183,6 +184,52 @@ def _parse_strict_json(probe: dict[str, Any], result: dict[str, Any]) -> dict[st
         "normalized_output": json.dumps(parsed, ensure_ascii=False, sort_keys=True),
         "details": {"parsed": parsed},
         "signal_tags": ["behavior", "protocol"],
+    }
+
+
+def _parse_json_assertions(probe: dict[str, Any], result: dict[str, Any]) -> dict[str, Any]:
+    text = (result.get("message_content") or "").strip()
+    assertions = probe.get("assertions", [])
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        return {
+            "parse_success": False,
+            "score": 0.0,
+            "structured_score": 0.0,
+            "exact_match_score": 0.0,
+            "normalized_output": text,
+            "details": {"reason": "invalid_json"},
+            "signal_tags": ["behavior", "capability"],
+        }
+
+    checks: list[dict[str, Any]] = []
+    passed = 0
+    for assertion in assertions:
+        path = str(assertion.get("path", "")).strip()
+        expected = assertion.get("equals")
+        actual = _json_path_value(parsed, path)
+        ok = actual == expected
+        checks.append(
+            {
+                "path": path,
+                "expected": expected,
+                "actual": actual,
+                "passed": ok,
+            }
+        )
+        if ok:
+            passed += 1
+    total = len(assertions) or 1
+    score = round(passed / total, 3)
+    return {
+        "parse_success": True,
+        "score": score,
+        "structured_score": score,
+        "exact_match_score": 1.0 if passed == len(assertions) and assertions else score,
+        "normalized_output": json.dumps(parsed, ensure_ascii=False, sort_keys=True),
+        "details": {"checks": checks, "checks_passed": passed, "checks_total": len(assertions)},
+        "signal_tags": ["behavior", "capability"],
     }
 
 
@@ -388,3 +435,28 @@ def _parse_logprobs_capability(probe: dict[str, Any], result: dict[str, Any]) ->
 
 def similarity(a: str, b: str) -> float:
     return SequenceMatcher(None, a, b).ratio()
+
+
+def _json_path_value(value: Any, path: str) -> Any:
+    if not path:
+        return value
+    current = value
+    for part in path.split("."):
+        key = part.strip()
+        if not key:
+            return None
+        if isinstance(current, list):
+            try:
+                index = int(key)
+            except ValueError:
+                return None
+            if index < 0 or index >= len(current):
+                return None
+            current = current[index]
+            continue
+        if not isinstance(current, dict):
+            return None
+        if key not in current:
+            return None
+        current = current[key]
+    return current

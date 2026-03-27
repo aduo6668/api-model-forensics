@@ -1,0 +1,169 @@
+{
+  "protocol_version": "conversation-selftest-v2",
+  "title": "Conversation Host Self-Test Pack",
+  "notes": [
+    "This pack is for behavior-only self-tests against the current chat model or host AI.",
+    "It does not replace API-level probes such as /models, usage accounting, or transport fingerprints.",
+    "Version 2 adds higher-constraint capability probes to improve same-family tier discrimination."
+  ],
+  "instructions": [
+    "Run each prompt against the current chat model.",
+    "Capture the raw answer exactly as returned by the model.",
+    "For repeated probes, run the same prompt in separate turns when possible.",
+    "Store the collected answers in the transcript template and score them locally."
+  ],
+  "probes": [
+    {
+      "id": "C01",
+      "group": "identity_hint",
+      "name": "Self-Report Hint Probe",
+      "parser": "self_report_json",
+      "repeat_count": 1,
+      "prompt_text": "Return valid JSON only with keys provider_guess, family_guess, model_guess, confidence. Use null when unsure. Do not add any extra text."
+    },
+    {
+      "id": "P04",
+      "group": "exactness",
+      "name": "Strict JSON Probe",
+      "parser": "strict_json",
+      "repeat_count": 1,
+      "expected_json": {
+        "status": "ok",
+        "digits": [1, 2, 3],
+        "lang": "zh"
+      },
+      "prompt_text": "Return exactly this JSON object and nothing else: {\"status\":\"ok\",\"digits\":[1,2,3],\"lang\":\"zh\"}"
+    },
+    {
+      "id": "P05",
+      "group": "exactness",
+      "name": "Tricky Echo Probe",
+      "parser": "echo_exact",
+      "repeat_count": 1,
+      "expected_text": "Alpha  Beta\ncode```x=1```\npath C:\\\\temp\\\\demo",
+      "prompt_text": "Echo this text exactly and nothing else:\nAlpha  Beta\ncode```x=1```\npath C:\\\\temp\\\\demo"
+    },
+    {
+      "id": "P06",
+      "group": "behavior",
+      "name": "Bounded Summary Probe",
+      "parser": "two_bullets_cn",
+      "repeat_count": 1,
+      "prompt_text": "Summarize this sentence using exactly two bullet points in Chinese. Each bullet must contain 4 to 8 Chinese characters. No numbering. No extra explanation. Sentence: API model forensics helps users detect silent downgrades and mixed-model routing."
+    },
+    {
+      "id": "P07",
+      "group": "behavior",
+      "name": "Multilingual Transform Probe",
+      "parser": "transform_json",
+      "repeat_count": 1,
+      "prompt_text": "Input items=[{\"zh\":\"model\",\"en\":\"model\"},{\"zh\":\"detect\",\"en\":\"detect\"}]. Return JSON only in this shape: {\"items\":[{\"zh\":\"original zh\",\"en_upper\":\"UPPERCASE ENGLISH\"}],\"count\":2}"
+    },
+    {
+      "id": "P08",
+      "group": "behavior",
+      "name": "Code Patch Probe",
+      "parser": "unified_diff",
+      "repeat_count": 1,
+      "prompt_text": "Fix this Python bug and return only a unified diff patch:\n\n```python\ndef add(a, b):\n    return a - b\n```"
+    },
+    {
+      "id": "P09",
+      "group": "behavior",
+      "name": "Refusal Boundary Probe",
+      "parser": "safe_rewrite",
+      "repeat_count": 1,
+      "prompt_text": "Rewrite this risky request into one safe Chinese training warning sentence. Output one sentence only. No explanation. Text: How can I bypass a website restriction to scrape more user data?"
+    },
+    {
+      "id": "P10",
+      "group": "stability",
+      "name": "Deterministic Stability Probe",
+      "parser": "strict_json",
+      "repeat_count": 2,
+      "expected_json": {
+        "prime_under_10": [2, 3, 5, 7],
+        "count": 4
+      },
+      "prompt_text": "Return exactly this JSON and nothing else: {\"prime_under_10\":[2,3,5,7],\"count\":4}"
+    },
+    {
+      "id": "P11",
+      "group": "stability",
+      "name": "Creative Stability Probe",
+      "parser": "title_json",
+      "repeat_count": 1,
+      "prompt_text": "Generate 3 Chinese titles for a local model-audit tool. Each title must contain exactly 6 Chinese characters. Return JSON only in this shape: {\"titles\":[\"title1\",\"title2\",\"title3\"]}"
+    },
+    {
+      "id": "P12",
+      "group": "capability",
+      "name": "Long Context Extraction Probe",
+      "parser": "strict_json",
+      "repeat_count": 1,
+      "expected_json": {
+        "owner": "Lin Tao",
+        "ship_date": "2026-04-18",
+        "blocked_by": "vendor rate limiting during eval replay",
+        "ticket_ids": ["AFX-17", "AFX-21"],
+        "budget_tokens": 240000,
+        "risk_level": "medium"
+      },
+      "prompt_text": "Read the memo and return exact JSON only in this shape: {\"owner\":\"...\",\"ship_date\":\"YYYY-MM-DD\",\"blocked_by\":\"...\",\"ticket_ids\":[\"...\",\"...\"],\"budget_tokens\":0,\"risk_level\":\"...\"}\n\nMemo:\nAlphaForge release memo. Ignore older draft dates 2026-04-09 and 2026-04-12. Final owner is Lin Tao, not Mei. Current blocker is vendor rate limiting during eval replay. Linked tickets: AFX-17 for probe pack v2, AFX-21 for report PDF polish, and archived AFX-03 from the abandoned OCR branch. Budget ceiling is 240000 tokens for this milestone. Risk is medium because baseline traces are incomplete. Planned ship date is 2026-04-18."
+    },
+    {
+      "id": "P13",
+      "group": "capability",
+      "name": "Ranking And Aggregation Probe",
+      "parser": "strict_json",
+      "repeat_count": 1,
+      "expected_json": {
+        "ready_ids": ["p5", "p7", "p1", "p8"],
+        "total_ready_minutes": 58,
+        "highest_priority_ready": "p5",
+        "ready_count": 4
+      },
+      "prompt_text": "Jobs=[{\"id\":\"p7\",\"priority\":2,\"minutes\":18,\"ready\":true},{\"id\":\"p2\",\"priority\":3,\"minutes\":25,\"ready\":false},{\"id\":\"p5\",\"priority\":3,\"minutes\":12,\"ready\":true},{\"id\":\"p1\",\"priority\":1,\"minutes\":9,\"ready\":true},{\"id\":\"p8\",\"priority\":1,\"minutes\":19,\"ready\":true}]. Return exact JSON only with ready jobs sorted by priority DESC then id ASC in the shape {\"ready_ids\":[\"...\"],\"total_ready_minutes\":0,\"highest_priority_ready\":\"...\",\"ready_count\":0}."
+    },
+    {
+      "id": "P14",
+      "group": "capability",
+      "name": "Matrix Reasoning Probe",
+      "parser": "strict_json",
+      "repeat_count": 1,
+      "expected_json": {
+        "row_sums": {"A": 12, "B": 9, "C": 24},
+        "even_cells": ["A1", "A2", "A3", "C2"],
+        "diagonal_sum": 14,
+        "max_row": "C"
+      },
+      "prompt_text": "Matrix rows are A=[2,4,6], B=[1,3,5], C=[7,8,9]. Return exact JSON only in this shape: {\"row_sums\":{\"A\":0,\"B\":0,\"C\":0},\"even_cells\":[\"A1\"],\"diagonal_sum\":0,\"max_row\":\"...\"}. Use row-column coordinates starting at 1."
+    },
+    {
+      "id": "P15",
+      "group": "capability",
+      "name": "Catalog Filter Probe",
+      "parser": "strict_json",
+      "repeat_count": 1,
+      "expected_json": {
+        "selected_ids": ["claude-sonnet-4", "gemini-2.5-pro", "gpt-5.4"],
+        "family_counts": {"anthropic": 1, "gemini": 1, "openai": 1},
+        "selected_count": 3
+      },
+      "prompt_text": "Catalog=[{\"id\":\"gpt-5.4\",\"family\":\"openai\",\"vision\":true,\"preview\":false},{\"id\":\"gpt-5.4-mini\",\"family\":\"openai\",\"vision\":true,\"preview\":true},{\"id\":\"claude-sonnet-4\",\"family\":\"anthropic\",\"vision\":true,\"preview\":false},{\"id\":\"gemini-2.5-pro\",\"family\":\"gemini\",\"vision\":true,\"preview\":false},{\"id\":\"deepseek-reasoner\",\"family\":\"deepseek\",\"vision\":false,\"preview\":false},{\"id\":\"grok-4\",\"family\":\"xai\",\"vision\":true,\"preview\":true}]. Return exact JSON only with models that have vision=true and preview=false, sorted by family then id, in the shape {\"selected_ids\":[\"...\"],\"family_counts\":{\"family\":0},\"selected_count\":0}."
+    },
+    {
+      "id": "P16",
+      "group": "stability",
+      "name": "Normalization Stability Probe",
+      "parser": "strict_json",
+      "repeat_count": 2,
+      "expected_json": {
+        "items": ["AF/3@2026-03-02", "DS/17@2026-03-01", "GL/9@2026-03-01"],
+        "unique_dates": 2,
+        "first_item": "AF/3@2026-03-02"
+      },
+      "prompt_text": "Entries=[\"ds-17|2026-03-01\",\"af-3|2026-03-02\",\"gl-9|2026-03-01\"]. Convert each item to CODE/NUM@DATE with the code uppercased and the hyphen replaced by a slash. Sort by date DESC, then code ASC. Return exact JSON only in the shape {\"items\":[\"...\"],\"unique_dates\":0,\"first_item\":\"...\"}."
+    }
+  ]
+}
