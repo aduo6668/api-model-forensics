@@ -57,6 +57,8 @@ def execute_probe(probe: dict[str, Any], ctx: ProbeExecutionContext, repeat_inde
         payload[key] = value
 
     stream = bool(probe.get("stream", False))
+    if stream:
+        payload["stream"] = True
     result = api_client.post_chat(
         ctx.base_url,
         ctx.api_key,

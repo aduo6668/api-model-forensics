@@ -251,11 +251,14 @@ def _openai_post_chat(
     timeout: int = 60,
 ) -> dict[str, Any]:
     started = time.perf_counter()
+    body = dict(payload)
+    if stream:
+        body["stream"] = True
     try:
         response = requests.post(
             chat_endpoint(resolution, claimed_model=payload.get("model", "")),
             headers=_openai_headers(api_key),
-            json=payload,
+            json=body,
             timeout=timeout,
             stream=stream,
         )
@@ -524,6 +527,7 @@ def _consume_openai_stream_response(response: requests.Response, started: float)
     usage: dict[str, Any] = {}
     finish_reason: str | None = None
     raw_chunks: list[str] = []
+    non_sse_lines: list[str] = []
 
     try:
         for line in response.iter_lines(decode_unicode=True):
@@ -532,6 +536,8 @@ def _consume_openai_stream_response(response: requests.Response, started: float)
             if isinstance(line, bytes):
                 line = line.decode("utf-8", errors="ignore")
             if not line.startswith("data:"):
+                non_sse_lines.append(line)
+                raw_chunks.append(line)
                 continue
             chunk = line[5:].strip()
             if not chunk:
@@ -582,6 +588,15 @@ def _consume_openai_stream_response(response: requests.Response, started: float)
             "stream_chunk_count": chunk_count,
         }
 
+    latency_ms = int((time.perf_counter() - started) * 1000)
+    if chunk_count == 0 and non_sse_lines:
+        fallback_text = "\n".join(non_sse_lines).strip()
+        try:
+            data = json.loads(fallback_text)
+        except json.JSONDecodeError:
+            return _plain_text_error_response(response.status_code, response.ok, fallback_text, latency_ms)
+        return _normalize_openai_response(response.status_code, response.ok, data, latency_ms)
+
     return {
         "ok": response.ok,
         "status_code": response.status_code,
@@ -592,7 +607,7 @@ def _consume_openai_stream_response(response: requests.Response, started: float)
         "tool_calls": tool_calls,
         "usage": usage,
         "finish_reason": finish_reason,
-        "latency_total_ms": int((time.perf_counter() - started) * 1000),
+        "latency_total_ms": latency_ms,
         "ttft_ms": ttft_ms,
         "inter_token_times_ms": inter_token_times_ms,
         "stream_chunk_count": chunk_count,

@@ -31,17 +31,30 @@ def generate_pdf_report(output_path: Path, summary: dict[str, Any], results: lis
     y = _write_paragraph(page, y, f"Confidence: {summary['confidence_level']}", **font_kwargs)
     y += 8
 
-    y = _write_heading(page, y, "Probability Summary", 14, **font_kwargs)
-    y = _write_paragraph(page, y, f"- Claimed model: {summary['candidate_probabilities']['claimed_model_probability']:.1%}", **font_kwargs)
-    y = _write_paragraph(page, y, f"- Same-family downgrade: {summary['candidate_probabilities']['same_family_downgrade_probability']:.1%}", **font_kwargs)
-    y = _write_paragraph(page, y, f"- Alternative family: {summary['candidate_probabilities']['alternative_family_probability']:.1%}", **font_kwargs)
-    y = _write_paragraph(page, y, f"- Wrapped / unknown: {summary['candidate_probabilities']['wrapped_or_unknown_probability']:.1%}", **font_kwargs)
+    y = _write_heading(page, y, "Decision Hypotheses", 14, **font_kwargs)
+    for item in summary.get("hypothesis_ranking", []):
+        y = _write_paragraph(page, y, f"- {item['label']}: {item['probability']:.1%}", **font_kwargs)
+        y = _write_paragraph(page, y, f"  rationale: {item['rationale']}", fontsize=10, **font_kwargs)
 
     y += 8
-    y = _write_heading(page, y, "Top Candidates", 14, **font_kwargs)
-    for item in summary["top_candidates"]:
+    y = _write_heading(page, y, "Model Candidates", 14, **font_kwargs)
+    for item in summary.get("model_candidate_ranking", [])[:5]:
         y = _write_paragraph(page, y, f"- {item['name']}: {item['probability']:.1%} ({item['kind']})", **font_kwargs)
         y = _write_paragraph(page, y, f"  rationale: {item['rationale']}", fontsize=10, **font_kwargs)
+
+    observed_hints = summary.get("observed_model_hints", [])
+    if observed_hints:
+        y += 8
+        y = _write_heading(page, y, "Observed Catalog Hints", 14, **font_kwargs)
+        for hint in observed_hints[:5]:
+            y = _write_paragraph(page, y, f"- {hint}", **font_kwargs)
+
+    weak_hints = summary.get("weak_model_hints", [])
+    if weak_hints:
+        y += 8
+        y = _write_heading(page, y, "Weak Self-Claimed Hints", 14, **font_kwargs)
+        for hint in weak_hints[:5]:
+            y = _write_paragraph(page, y, f"- {hint}", **font_kwargs)
 
     y += 8
     y = _write_heading(page, y, "Evidence Breakdown", 14, **font_kwargs)

@@ -197,7 +197,10 @@ def _build_cli_payload(args: argparse.Namespace, result: dict[str, Any]) -> dict
             "verdict_label": summary["verdict_label"],
             "confidence_level": summary["confidence_level"],
             "observed_model_hints": summary.get("observed_model_hints", []),
+            "weak_model_hints": summary.get("weak_model_hints", []),
             "candidate_probabilities": summary["candidate_probabilities"],
+            "hypothesis_ranking": summary.get("hypothesis_ranking", []),
+            "model_candidate_ranking": summary.get("model_candidate_ranking", []),
             "top_candidates": summary["top_candidates"],
             "primary_reason": summary["primary_reason"],
             "secondary_reason": summary["secondary_reason"],
@@ -220,7 +223,6 @@ def _build_cli_payload(args: argparse.Namespace, result: dict[str, Any]) -> dict
 
 def _render_text(payload: dict[str, Any]) -> str:
     decision = payload["decision"]
-    probs = decision["candidate_probabilities"]
     runtime = payload.get("runtime", {})
     lines = [
         "API Model Forensics CLI",
@@ -231,20 +233,22 @@ def _render_text(payload: dict[str, Any]) -> str:
         f"Verdict: {decision['verdict_label']}",
         f"Confidence: {decision['confidence_level']}",
         "",
-        "Probabilities:",
-        f"- Claimed model: {probs['claimed_model_probability']:.1%}",
-        f"- Same-family downgrade: {probs['same_family_downgrade_probability']:.1%}",
-        f"- Alternative family: {probs['alternative_family_probability']:.1%}",
-        f"- Wrapped or unknown: {probs['wrapped_or_unknown_probability']:.1%}",
-        "",
-        "Top candidates:",
+        "Decision hypotheses:",
     ]
-    for item in decision["top_candidates"]:
+    for item in decision.get("hypothesis_ranking", []):
+        lines.append(f"- {item['label']}: {item['probability']:.1%}")
+    lines.extend(["", "Model candidates:"])
+    for item in decision.get("model_candidate_ranking", [])[:5]:
         lines.append(f"- {item['name']}: {item['probability']:.1%} ({item['kind']})")
     observed_hints = decision.get("observed_model_hints", [])
     if observed_hints:
-        lines.extend(["", "Observed model hints:"])
+        lines.extend(["", "Observed catalog hints:"])
         for hint in observed_hints[:5]:
+            lines.append(f"- {hint}")
+    weak_hints = decision.get("weak_model_hints", [])
+    if weak_hints:
+        lines.extend(["", "Weak self-claimed hints:"])
+        for hint in weak_hints[:5]:
             lines.append(f"- {hint}")
     lines.extend(
         [

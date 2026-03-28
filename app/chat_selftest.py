@@ -173,8 +173,11 @@ def score_chat_self_test_transcript(
         "base_verdict_label": summary["verdict_label"],
         "confidence_level": summary["confidence_level"],
         "candidate_probabilities": summary["candidate_probabilities"],
+        "hypothesis_ranking": summary.get("hypothesis_ranking", []),
+        "model_candidate_ranking": summary.get("model_candidate_ranking", []),
         "top_candidates": summary["top_candidates"],
         "observed_model_hints": summary.get("observed_model_hints", []),
+        "weak_model_hints": summary.get("weak_model_hints", []),
         "self_report_hints": self_report["hints"],
         "feature_summary": summary["feature_summary"],
         "primary_reason": summary["primary_reason"],
@@ -203,7 +206,6 @@ def score_chat_self_test_transcript(
 
 def render_chat_self_test_score_text(payload: dict[str, Any]) -> str:
     completion = payload["completion"]
-    probs = payload["candidate_probabilities"]
     lines = [
         "API Model Forensics Direct Chat Self-Test",
         f"Suite: {payload['suite']}",
@@ -216,23 +218,24 @@ def render_chat_self_test_score_text(payload: dict[str, Any]) -> str:
         f"- Received: {completion['received_responses']}/{completion['expected_responses']}",
         f"- Completion rate: {completion['completion_rate']:.1%}",
         "",
-        "Probabilities:",
-        f"- Claimed model: {probs['claimed_model_probability']:.1%}",
-        f"- Same-family downgrade: {probs['same_family_downgrade_probability']:.1%}",
-        f"- Alternative family: {probs['alternative_family_probability']:.1%}",
-        f"- Wrapped or unknown: {probs['wrapped_or_unknown_probability']:.1%}",
-        "",
-        "Top candidates:",
+        "Decision hypotheses:",
     ]
-    for item in payload.get("top_candidates", []):
+    for item in payload.get("hypothesis_ranking", []):
+        lines.append(f"- {item['label']}: {item['probability']:.1%}")
+    lines.extend(["", "Model candidates:"])
+    for item in payload.get("model_candidate_ranking", [])[:5]:
         lines.append(f"- {item['name']}: {item['probability']:.1%} ({item['kind']})")
     if payload.get("self_report_hints"):
-        lines.extend(["", "Self-report hints:"])
+        lines.extend(["", "Self-report hints (weak metadata):"])
         for hint in payload["self_report_hints"]:
             lines.append(f"- {hint}")
     if payload.get("observed_model_hints"):
-        lines.extend(["", "Observed model hints:"])
+        lines.extend(["", "Observed catalog hints:"])
         for hint in payload["observed_model_hints"][:5]:
+            lines.append(f"- {hint}")
+    if payload.get("weak_model_hints"):
+        lines.extend(["", "Weak model hints used for candidate narrowing:"])
+        for hint in payload["weak_model_hints"][:5]:
             lines.append(f"- {hint}")
     if payload["transcript"]["missing_cases"]:
         lines.extend(["", "Missing cases:"])
@@ -350,9 +353,8 @@ def _decorate_summary(
     self_report: dict[str, Any],
     missing_cases: list[str],
 ) -> dict[str, Any]:
-    summary["observed_model_hints"] = _unique(
-        [*self_report["hints"], *summary.get("observed_model_hints", [])]
-    )[:10]
+    summary["observed_model_hints"] = _unique(summary.get("observed_model_hints", []))[:10]
+    summary["weak_model_hints"] = _unique([*self_report["hints"], *summary.get("weak_model_hints", [])])[:10]
     summary["confidence_level"] = _cap_confidence(summary.get("confidence_level", "low"))
     summary["conversation_verdict_label"] = _conversation_verdict(summary)
     summary["primary_reason"] = (

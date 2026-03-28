@@ -42,8 +42,7 @@ def run_analysis(
         for repeat_index in range(1, repeats + 1):
             if progress_cb:
                 progress_cb(f"Running {probe['id']} ({probe['name']}) [{repeat_index}/{repeats}] ...")
-            result = execute_probe(probe, ctx, repeat_index=repeat_index)
-            results.append(result)
+            results.append(execute_probe(probe, ctx, repeat_index=repeat_index))
 
     summary = score_run(results, claimed_model=claimed_model, provider_hint=provider_hint)
     finished_at = datetime.now()
@@ -210,6 +209,15 @@ def _build_report_payload(
             "total_tokens": total_tokens,
         },
         "evidence_layers": _build_evidence_layers(summary, results),
+        "decision_hypotheses": {
+            "ranking": summary.get("hypothesis_ranking", []),
+            **summary["candidate_probabilities"],
+        },
+        "model_candidates": {
+            "ranking": summary.get("model_candidate_ranking", []),
+            "observed_catalog_hints": summary.get("observed_model_hints", []),
+            "weak_model_hints": summary.get("weak_model_hints", []),
+        },
         "candidate_probabilities": {
             **summary["candidate_probabilities"],
             "top_candidates": summary["top_candidates"],
@@ -285,37 +293,37 @@ def _group_purpose(group_name: str) -> str:
 
 def _layer_signal(layer_name: str, features: dict[str, float]) -> str:
     if layer_name == "protocol":
-        return f"协议一致性分数 {features['protocol_score']:.3f}"
+        return f"Protocol surface fit {features['protocol_score']:.3f}"
     if layer_name == "tokenizer_accounting":
-        return f"分词与计量侧信号分数 {features['tokenizer_score']:.3f}"
+        return f"Tokenizer/accounting fit {features['tokenizer_score']:.3f}"
     if layer_name == "behavior":
-        return f"格式与行为一致性分数 {features['behavior_score']:.3f}"
+        return f"Behavioral fit {features['behavior_score']:.3f}"
     if layer_name == "stability_routing":
-        return f"稳定性分数 {features['stability_score']:.3f}，路由风险 {features['routing_shift_score']:.3f}"
-    return f"包装层可疑度 {features['wrapper_suspicion_score']:.3f}"
+        return f"Stability {features['stability_score']:.3f}; routing risk {features['routing_shift_score']:.3f}"
+    return f"Wrapper suspicion {features['wrapper_suspicion_score']:.3f}"
 
 
 def _layer_confounders(layer_name: str, features: dict[str, float]) -> list[str]:
     confounders: list[str] = []
     if layer_name == "tokenizer_accounting" and features["usage_available_score"] < 0.5:
-        confounders.append("usage 字段不足")
+        confounders.append("usage fields are missing or incomplete")
     if layer_name == "stability_routing" and features["routing_shift_score"] >= 0.35:
-        confounders.append("重复采样存在漂移")
+        confounders.append("repeated probes show noticeable drift")
     if layer_name == "wrapper_policy" and features["wrapper_suspicion_score"] >= 0.35:
-        confounders.append("可能存在策略改写")
+        confounders.append("a wrapper or policy layer may be rewriting outputs")
     return confounders
 
 
 def _layer_interpretation(layer_name: str, features: dict[str, float]) -> str:
     if layer_name == "protocol":
-        return "高分表示接口表面更像稳定的一方实现。"
+        return "Higher scores mean the endpoint surface looks more like a stable first-party implementation."
     if layer_name == "tokenizer_accounting":
-        return "高分表示回显和 usage 计量更稳定。"
+        return "Higher scores mean echo behavior and usage accounting are more internally consistent."
     if layer_name == "behavior":
-        return "高分表示结构化输出、改写与多语转换更稳。"
+        return "Higher scores mean structured output, rewriting, and multilingual behavior are more consistent."
     if layer_name == "stability_routing":
-        return "高分表示重复采样更稳；低分提示混模或路由切换风险。"
-    return "高分不代表更好，而是包装层可疑度更高。"
+        return "Higher scores mean repeated probes stay stable; lower scores suggest routing drift or mixed backends."
+    return "Higher scores do not mean better quality; they mean wrapper suspicion is stronger."
 
 
 def _layer_confidence(score: float) -> str:
@@ -335,22 +343,24 @@ def _evidence_strength(confidence_level: str) -> str:
 
 
 def _classify_caveat(message: str) -> str:
-    if "包装层" in message or "策略" in message:
+    lowered = message.lower()
+    if "wrapper" in lowered or "policy" in lowered:
         return "wrapper"
-    if "漂移" in message or "混模" in message or "fallback" in message:
+    if "drift" in lowered or "mixed backend" in lowered or "fallback" in lowered:
         return "routing"
-    if "协议层" in message:
+    if "protocol" in lowered:
         return "endpoint_compatibility"
-    if "usage" in message or "token accounting" in message:
+    if "usage" in lowered or "token accounting" in lowered or "token-accounting" in lowered:
         return "token_accounting"
     return "low_signal"
 
 
 def _caveat_impact(message: str) -> str:
-    if "漂移" in message or "混模" in message:
+    lowered = message.lower()
+    if "drift" in lowered or "mixed backend" in lowered:
         return "reduces confidence in a single-model judgment"
-    if "包装层" in message or "策略" in message:
+    if "wrapper" in lowered or "policy" in lowered:
         return "may distort underlying family signals"
-    if "协议层" in message:
+    if "protocol" in lowered:
         return "surface compatibility may be misleading"
     return "suggests re-running with deeper or repeated probes"
